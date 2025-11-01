@@ -26,4 +26,7 @@ urlpatterns = [
     path('warehouses/delete/<str:warehouse_id>/', views.warehouses_delete, name='warehouses_delete'),
     path('profile/', views.client_profile, name='client_profile'),
 
+    path('invoices/', views.invoice_list, name='invoice_list'),
+
+
 ]

@@ -14,7 +14,7 @@ from django.shortcuts import redirect
 from django.contrib.auth import logout
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
-
+from .models import Invoice
 
 client = MongoClient("mongodb://localhost:27017")
 db = client["PostOffice_Proj_MDB"]  # ← o nome da tua base de dados
@@ -25,19 +25,23 @@ users = db["users"]
 postoffice = db["postoffice"]
 vehicles = db["vehicles"]
 
-
 def role_required(allowed_roles):
     """Decorator to restrict view access by user role."""
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
-            # fetch the user's role from MongoDB
             user_doc = users.find_one({"username": request.user.username})
             if not user_doc or user_doc.get("role") not in allowed_roles:
                 return HttpResponseForbidden("You do not have permission to view this page.")
             return view_func(request, *args, **kwargs)
         return wrapper
     return decorator
+
+@login_required
+@role_required(["admin", "client"])
+def invoice_list(request):
+    invoices = Invoice.objects.select_related('user').all().order_by('-invoice_datetime')
+    return render(request, 'invoices/invoice.html', {'transactions': invoices})
 
 from django.contrib.auth import authenticate, login as auth_login
 
