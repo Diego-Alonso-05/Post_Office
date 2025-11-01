@@ -3,13 +3,28 @@
 {% block content %}
 <div class="grid">
   <aside class="sidebar card">
-    <h3 style="margin-top:0">Admin</h3>
-    <nav style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+    <aside class="sidebar card">
+  <h3 style="margin-top:0">
+    {% if request.session.role == "admin" %}Admin
+    {% elif request.session.role == "driver" %}Driver
+    {% elif request.session.role == "client" %}Client
+    {% endif %}
+  </h3>
+
+  <nav style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+    {% if request.session.role == "admin" %}
       <a class="btn" href="{% url 'warehouses_list' %}"><i class="fa fa-warehouse"></i> Warehouses</a>
       <a class="btn" href="{% url 'mail_list' %}"><i class="fa fa-envelope-open"></i> Mail</a>
       <a class="btn" href="{% url 'vehicles_list' %}"><i class="fa fa-car"></i> Vehicles</a>
       <a class="btn" href="{% url 'deliveries_list' %}"><i class="fa fa-truck"></i> Deliveries</a>
-    </nav>
+    {% elif request.session.role == "driver" %}
+      <a class="btn" href="{% url 'deliveries_list' %}"><i class="fa fa-truck"></i> My Deliveries</a>
+    {% elif request.session.role == "client" %}
+      <a class="btn" href="{% url 'client_profile' %}"><i class="fa fa-user"></i> Profile</a>
+      <a class="btn" href="{% url 'deliveries_list' %}"><i class="fa fa-truck"></i> My Deliveries</a>
+    {% endif %}
+  </nav>
+</aside>
   </aside>
 
   <section>

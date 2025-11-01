@@ -81,26 +81,31 @@
         </div>
       </div>
        <nav class="nav-links">
-    {% if request.user.is_authenticated %}
-        <!-- Authenticated area -->
-        {% if request.session.role == "admin" %}
-            <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
-            <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
-            <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
-            <a class="btn" href="{% url 'mail_list' %}">Mail</a>
-            <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-        {% elif request.session.role == "driver" %}
-            <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
-            <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-        {% elif request.session.role == "client" %}
-            <a class="btn" href="{% url 'client_profile' %}">Profile</a>
-        {% endif %}
-        <a class="btn" href="{% url 'logout' %}">Logout</a>
-    {% else %}
-        <!-- Not logged in -->
-        <a class="btn" href="{% url 'login' %}">Login</a>
-        <a class="btn btn-primary" href="{% url 'register' %}">Register</a>
+  {% if request.user.is_authenticated %}
+    
+    <!-- Dashboard is always visible for logged-in users -->
+    <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
+
+    <!-- Links per role -->
+    {% if request.session.role == "admin" %}
+        <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
+        <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
+        <a class="btn" href="{% url 'mail_list' %}">Mail</a>
+        <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
+    {% elif request.session.role == "driver" %}
+        <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
+    {% elif request.session.role == "client" %}
+        <a class="btn" href="{% url 'client_profile' %}">Profile</a>
     {% endif %}
+
+    <!-- Logout -->
+    <a class="btn" href="{% url 'logout' %}">Logout</a>
+
+  {% else %}
+    <!-- Not logged in -->
+    <a class="btn" href="{% url 'login' %}">Login</a>
+    <a class="btn btn-primary" href="{% url 'register' %}">Register</a>
+  {% endif %}
 </nav>
     </header>
 
