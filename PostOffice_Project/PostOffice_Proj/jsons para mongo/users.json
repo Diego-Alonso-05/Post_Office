@@ -37,5 +37,18 @@
       "driving_experience_years": 7,
       "driver_status": "Available"
     }
+  },
+  {
+    "_id": 3,
+    "username": "admin",
+    "psswd_hash": "admin",
+    "name": "Eu",
+    "contact": "+123456789",
+    "address": "123 Main St, City",
+    "email": "john@example.com",
+    "created_at": "2025-11-01T12:00:00Z",
+    "updated_at": "2025-11-01T12:00:00Z",
+    "role": "client",
+    "tax_id": "TAX123456"
   }
 ]
