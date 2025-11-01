@@ -17,10 +17,10 @@ from bson.errors import InvalidId
 from .models import Invoice
 
 client = MongoClient("mongodb://localhost:27017")
-db = client["PostOffice_Proj_MDB"]  # ← o nome da tua base de dados
+db = client["postoffice"]  # ← o nome da tua base de dados
 deliveries = db["deliveries"]
 notifications = db["notifications"]
-routes = db["routes"]
+routes_collection = db["routes"]
 users = db["users"]
 postoffice = db["postoffice"]
 vehicles = db["vehicles"]
@@ -240,6 +240,15 @@ def vehicles_list(request):
     return render(request, "vehicles/list.html", {"vehicles": cleaned_vehicles})
 
 @login_required
+def routes_list(request):
+    routes = list(routes_collection.find())
+    # Convert _id (int or ObjectId) for easier use in templates
+    for r in routes:
+        r["id"] = r.get("_id")
+    context = {"routes": routes}
+    return render(request, "routes/list.html", context)
+
+@login_required
 @role_required(["Admin"])
 @login_required
 def vehicles_edit(request, vehicle_id):
@@ -275,7 +284,7 @@ def mail_detail(request, mail_id):
     return render(request, "mail/detail.html", {"mail_id": mail_id})
 
 @login_required
-@role_required(["driver", "admin"])
+@role_required(["driver", "admin", "client"])
 def deliveries_list(request):
     deliveries_data = list(deliveries.find())
     deliveries_list = []
@@ -311,22 +320,27 @@ def deliveries_create(request):
     return render(request, "deliveries/create.html")
 
 @login_required
+@login_required
 def deliveries_edit(request, delivery_id):
-    """Edit an existing delivery."""
-    delivery = deliveries.find_one({"_id": ObjectId(delivery_id)})
+    deliveries_collection = db["deliveries"]
+    delivery = deliveries_collection.find_one({"_id": delivery_id})
+
     if not delivery:
-        return HttpResponseNotFound("Delivery not found.")
+        return render(request, "404.html", status=404)
 
     if request.method == "POST":
+        # Example — update fields based on your form
         updated_data = {
-            "recipient": request.POST.get("recipient"),
-            "address": request.POST.get("address"),
             "status": request.POST.get("status"),
+            "destination": request.POST.get("destination"),
+            "delivery_date": request.POST.get("delivery_date"),
+            # Add other fields you want to allow editing
         }
-        deliveries.update_one({"_id": ObjectId(delivery_id)}, {"$set": updated_data})
+        deliveries_collection.update_one({"_id": delivery_id}, {"$set": updated_data})
         return redirect("deliveries_list")
 
-    return render(request, "deliveries/edit.html", {"delivery": delivery})
+    context = {"delivery": delivery}
+    return render(request, "deliveries/edit.html", context)
 
 @login_required
 def deliveries_delete(request, delivery_id):
