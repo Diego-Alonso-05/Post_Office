@@ -4,7 +4,8 @@
     "name": "Central Porto Store",
     "address": "Av. Aliados 10, Porto",
     "contact": "+351222333444",
-    "po_schedule": "Mon-Fri 08:00–18:00",
+    "po_schedule_open": "08:00",
+    "po_schedule_close": "19:00",
     "maximum_storage_capacity": 5000
   }
 ]
