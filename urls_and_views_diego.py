@@ -59,7 +59,6 @@ def warehouses_edit(request, warehouse_id):
             postoffice.update_one({"_id": ObjectId(warehouse_id)}, {"$set": data})
             return redirect("warehouses_list")
     else:
-        # convertir de HH:MM a objeto time para el form
         if 'opening_time' in warehouse:
             warehouse['opening_time'] = datetime.strptime(warehouse['opening_time'], "%H:%M").time()
         if 'closing_time' in warehouse:
@@ -81,25 +80,23 @@ def warehouses_delete(request, warehouse_id):
 @login_required
 @role_required(["client", "admin"])
 def client_profile(request):
-    # Buscar usuario en MongoDB
     user_doc = users.find_one({"username": request.user.username})
     if not user_doc:
         return redirect("dashboard")
 
-    # Entregas del cliente
     client_deliveries = list(deliveries.find({"client_id": user_doc["_id"]}))
     client_deliveries.sort(key=lambda x: x.get("updated_at", datetime.min), reverse=True)
     for d in client_deliveries:
         d['id'] = str(d['_id'])
 
-    # Facturas del cliente
     client_invoices = list(invoices.find({"client_id": user_doc["_id"]}))
     client_invoices.sort(key=lambda x: x.get("invoice_datetime", datetime.min), reverse=True)
     for i in client_invoices:
         i['id'] = str(i['_id'])
 
     return render(request, "clients/profile.html", {
-        "user": user_doc,               # Compatible con templates existentes
+        "user": user_doc,               
         "deliveries": client_deliveries,
-        "invoices": client_invoices     # Nuevas facturas añadidas
+        "invoices": client_invoices    
     })
+
