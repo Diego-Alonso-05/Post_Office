@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     01/11/2025 02:01:03                          */
+/* Created on:     01/11/2025 02:43:58                          */
 /*==============================================================*/
 
 
@@ -18,8 +18,6 @@ drop table INVOICE;
 
 drop table NOTIFICATION;
 
-drop table PICKS_UP_AT;
-
 drop table POST_OFFICE_STORE;
 
 drop table ROUTE;
@@ -35,7 +33,6 @@ create table CLIENT (
    USE_ID_USER          INT4                 not null,
    ID_USER              SERIAL               not null,
    ID_DELIVERY          INT4                 null,
-   ID_POSTOFFICE_STORE  INT4                 null,
    USERNAME             VARCHAR(20)          null,
    PSSWD_HASH           VARCHAR(50)          null,
    NAME                 VARCHAR(100)         null,
@@ -54,7 +51,7 @@ create table CLIENT (
 /*==============================================================*/
 create table DELIVERY (
    ID_DELIVERY          SERIAL               not null,
-   ID_INVOICE           INT4                 null,
+   ID_INVOICE           INT4                 not null,
    USE_ID_USER          INT4                 null,
    ID_USER              INT4                 null,
    TRACKING_NUMBER      VARCHAR(50)          null,
@@ -84,7 +81,7 @@ create table DELIVERY (
 create table EMPLOYEE (
    USE_ID_USER          INT4                 not null,
    ID_USER              SERIAL               not null,
-   ID_POSTOFFICE_STORE  INT4                 null,
+   ID_POSTOFFICE_STORE  INT4                 not null,
    USERNAME             VARCHAR(20)          null,
    PSSWD_HASH           VARCHAR(50)          null,
    NAME                 VARCHAR(100)         null,
@@ -199,20 +196,12 @@ create table NOTIFICATION (
 );
 
 /*==============================================================*/
-/* Table: PICKS_UP_AT                                           */
-/*==============================================================*/
-create table PICKS_UP_AT (
-   USE_ID_USER          INT4                 not null,
-   ID_USER              INT4                 not null,
-   ID_POSTOFFICE_STORE  INT4                 not null,
-   constraint PK_PICKS_UP_AT primary key (USE_ID_USER, ID_USER, ID_POSTOFFICE_STORE)
-);
-
-/*==============================================================*/
 /* Table: POST_OFFICE_STORE                                     */
 /*==============================================================*/
 create table POST_OFFICE_STORE (
    ID_POSTOFFICE_STORE  SERIAL               not null,
+   USE_ID_USER          INT4                 not null,
+   ID_USER              INT4                 not null,
    NAME                 VARCHAR(100)         null,
    CONTACT              VARCHAR(20)          null,
    ADDRESS              VARCHAR(255)         null,
@@ -249,7 +238,6 @@ create table ROUTE (
 /*==============================================================*/
 create table "USER" (
    ID_USER              SERIAL               not null,
-   ID_POSTOFFICE_STORE  INT4                 not null,
    USERNAME             VARCHAR(20)          null,
    PSSWD_HASH           VARCHAR(50)          null,
    NAME                 VARCHAR(100)         null,

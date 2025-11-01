@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      NoSQL Document Schema (JSON)                 */
-/* Created on:     01/11/2025 02:00:22                          */
+/* Created on:     01/11/2025 02:45:48                          */
 /*==============================================================*/
 
 
@@ -32,10 +32,6 @@ if exists(select 1 from sys.systable where table_name='NOTIFICATION' and table_t
    drop table NOTIFICATION
 end if;
 
-if exists(select 1 from sys.systable where table_name='PICKS_UP_AT' and table_type='BASE') then
-   drop table PICKS_UP_AT
-end if;
-
 if exists(select 1 from sys.systable where table_name='POST_OFFICE_STORE' and table_type='BASE') then
    drop table POST_OFFICE_STORE
 end if;
@@ -59,7 +55,6 @@ create table CLIENT (
 USE_ID_USER boolean not null,
 ID_USER NO not null,
 ID_DELIVERY boolean,
-ID_POSTOFFICE_STORE boolean,
 USERNAME VA20,
 PSSWD_HASH VA50,
 NAME VA100,
@@ -77,7 +72,7 @@ TAX_ID VA50
 /*==============================================================*/
 create table DELIVERY (
 ID_DELIVERY NO not null,
-ID_INVOICE boolean,
+ID_INVOICE boolean not null,
 USE_ID_USER boolean,
 ID_USER boolean,
 TRACKING_NUMBER VA50,
@@ -106,7 +101,7 @@ IN_TRANSITION BL
 create table EMPLOYEE (
 USE_ID_USER boolean not null,
 ID_USER NO not null,
-ID_POSTOFFICE_STORE boolean,
+ID_POSTOFFICE_STORE boolean not null,
 USERNAME VA20,
 PSSWD_HASH VA50,
 NAME VA100,
@@ -216,19 +211,12 @@ ERROR_MESSAGE TXT
 );
 
 /*==============================================================*/
-/* Table: PICKS_UP_AT                                           */
-/*==============================================================*/
-create table PICKS_UP_AT (
-USE_ID_USER boolean not null,
-ID_USER boolean not null,
-ID_POSTOFFICE_STORE boolean not null
-);
-
-/*==============================================================*/
 /* Table: POST_OFFICE_STORE                                     */
 /*==============================================================*/
 create table POST_OFFICE_STORE (
 ID_POSTOFFICE_STORE NO not null,
+USE_ID_USER boolean not null,
+ID_USER boolean not null,
 NAME VA100,
 CONTACT VA20,
 ADDRESS VA255,
@@ -263,7 +251,6 @@ DRIVER_NOTES TXT
 /*==============================================================*/
 create table "USER" (
 ID_USER NO not null,
-ID_POSTOFFICE_STORE boolean not null,
 USERNAME VA20,
 PSSWD_HASH VA50,
 NAME VA100,
