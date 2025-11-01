@@ -1,0 +1,39 @@
+[
+  {
+    "_id": 2001,
+    "description": "Lisbon North deliveries",
+    "delivery_status": "NotStarted",
+    "delivery_date": "2025-10-26",
+    "delivery_start_time": null,
+    "delivery_end_time": null,
+    "expected_duration": "03:30:00",
+    "kms_travelled": 0,
+    "driver_notes": "",
+    "driver_id": 2,
+    "vehicle_id": 4001,
+    "origin": {
+      "name": "Central Lisbon Post Office",
+      "address": "Av. da Liberdade 45, Lisbon",
+      "contact": "+351211000999"
+    },
+    "destination": {
+      "name": "North Zone Distribution Center",
+      "address": "Rua das Indústrias 12, Loures, Lisbon",
+      "contact": "+351212345678"
+    },
+    "deliveries": [
+      {
+        "delivery_id": 5001,
+        "tracking_number": "TRK123456789",
+        "status": "Registered",
+        "priority": "normal"
+      },
+      {
+        "delivery_id": 5002,
+        "tracking_number": "TRK987654321",
+        "status": "Ready",
+        "priority": "urgent"
+      }
+    ]
+  }
+]
