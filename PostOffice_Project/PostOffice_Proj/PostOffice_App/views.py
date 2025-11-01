@@ -12,6 +12,9 @@ from django.contrib.auth.models import User
 from django.contrib.auth import login as auth_login
 from django.shortcuts import redirect
 from django.contrib.auth import logout
+from bson.objectid import ObjectId
+from bson.errors import InvalidId
+
 
 client = MongoClient("mongodb://localhost:27017")
 db = client["postoffice"]  # ← o nome da tua base de dados
@@ -93,20 +96,173 @@ def dashboard(request):
 
     return render(request, "dashboard/admin.html", {"stats": stats, "role": role})
 
+class WarehouseForm(forms.Form):
+    name = forms.CharField(label="Warehouse Name", max_length=100)
+    address = forms.CharField(label="Address", max_length=200)
+    contact = forms.CharField(label="Contact", max_length=50)
+    po_schedule_open = forms.TimeField(label="Opening Time", widget=forms.TimeInput(format="%H:%M"))
+    po_schedule_close = forms.TimeField(label="Closing Time", widget=forms.TimeInput(format="%H:%M"))
+    maximum_storage_capacity = forms.IntegerField(label="Max Storage Capacity")
+
+# Views
+@login_required
+@role_required(["admin"])
 def warehouses_list(request):
-    return render(request, "warehouses/list.html")
+    all_warehouses = list(postoffice.find())
+    for w in all_warehouses:
+        w['id'] = str(w['_id'])
+    return render(request, "warehouses/list.html", {"warehouses": all_warehouses})
+
+@login_required
+@role_required(["admin"])
+def warehouses_create(request):
+    if request.method == "POST":
+        form = WarehouseForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data.copy()
+
+            # Rename to match your new DB schema
+            data["po_schedule_open"] = data["po_schedule_open"].strftime("%H:%M")
+            data["po_schedule_close"] = data["po_schedule_close"].strftime("%H:%M")
+
+            # Remove old keys if they exist (safety)
+            data.pop("opening_time", None)
+            data.pop("closing_time", None)
+
+            # Generate numeric _id manually (since not using ObjectId)
+            last = postoffice.find_one(sort=[("_id", -1)])
+            data["_id"] = (last["_id"] + 1) if last else 3001
+
+            postoffice.insert_one(data)
+            return redirect("warehouses_list")
+    else:
+        form = WarehouseForm()
+
+    return render(request, "warehouses/create.html", {"form": form})
+
+@login_required
+@role_required(["admin", "staff"] )
+def warehouses_edit(request, warehouse_id):
+    # Convert to integer for querying
+    try:
+        warehouse_id = int(warehouse_id)
+    except ValueError:
+        return HttpResponseBadRequest("Invalid warehouse ID")
+
+    warehouse = postoffice.find_one({"_id": warehouse_id})
+    if not warehouse:
+        return redirect("warehouses_list")
+
+    if request.method == "POST":
+        form = WarehouseForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data.copy()
+            data["po_schedule_open"] = data["po_schedule_open"].strftime("%H:%M")
+            data["po_schedule_close"] = data["po_schedule_close"].strftime("%H:%M")
+
+            postoffice.update_one({"_id": warehouse_id}, {"$set": data})
+            messages.success(request, "Warehouse updated successfully.")
+            return redirect("warehouses_list")
+    else:
+        # Convert stored times back to time objects for form display
+        if "po_schedule_open" in warehouse:
+            warehouse["po_schedule_open"] = datetime.strptime(warehouse["po_schedule_open"], "%H:%M").time()
+        if "po_schedule_close" in warehouse:
+            warehouse["po_schedule_close"] = datetime.strptime(warehouse["po_schedule_close"], "%H:%M").time()
+
+        form = WarehouseForm(initial=warehouse)
+
+    return render(request, "warehouses/edit.html", {
+        "form": form,
+        "warehouse_id": warehouse_id
+    })
+
+@login_required
+@role_required(["admin"])
+def warehouses_delete(request, warehouse_id):
+    postoffice.delete_one({"_id": ObjectId(warehouse_id)})
+    return redirect("warehouses_list")
+
+
 
 def logout_view(request):
     logout(request)
     request.session.flush()  # clears role from session
     return redirect("login")
 
+class VehicleForm(forms.Form):
+    vehicle_type = forms.CharField(max_length=100)
+    plate_number = forms.CharField(max_length=20)
+    capacity = forms.FloatField()
+    brand = forms.CharField(max_length=100)
+    model = forms.CharField(max_length=100)
+    vehicle_status = forms.CharField(max_length=50)
+    year = forms.IntegerField()
+    fuel_type = forms.CharField(max_length=50)
+    last_maintenance_date = forms.DateField()
+
+@login_required
+@role_required(["Admin", "Manager"])
+def vehicles_create(request):
+    if request.method == "POST":
+        form = VehicleForm(request.POST)
+        if form.is_valid():
+            # Generate next ID manually (since Mongo int IDs aren’t auto)
+            last_vehicle = vehicles.find_one(sort=[("_id", -1)])
+            next_id = (last_vehicle["_id"] + 1) if last_vehicle else 4001
+
+            data = form.cleaned_data
+            data["_id"] = next_id
+            vehicles.insert_one(data)
+            return redirect("vehicles_list")
+    else:
+        form = VehicleForm()
+
+    return render(request, "vehicles/create.html", {"form": form})
+
 
 @login_required
 @role_required(["admin"])
 def vehicles_list(request):
     all_vehicles = list(vehicles.find())
-    return render(request, "vehicles/list.html", {"vehicles": all_vehicles})
+
+    cleaned_vehicles = []
+    for v in all_vehicles:
+        _id = v.get("_id")
+        if _id:  # only add if ID exists
+            v["id"] = str(_id)
+            cleaned_vehicles.append(v)
+
+    return render(request, "vehicles/list.html", {"vehicles": cleaned_vehicles})
+
+@login_required
+@role_required(["Admin"])
+@login_required
+def vehicles_edit(request, vehicle_id):
+    # vehicle_id is an int, not ObjectId
+    vehicle = vehicles.find_one({"_id": int(vehicle_id)})
+
+    if not vehicle:
+        return HttpResponseNotFound("Vehicle not found")
+
+    if request.method == "POST":
+        updated_data = {
+            "vehicle_type": request.POST.get("vehicle_type"),
+            "plate_number": request.POST.get("plate_number"),
+            "capacity": float(request.POST.get("capacity")),
+            "brand": request.POST.get("brand"),
+            "model": request.POST.get("model"),
+            "vehicle_status": request.POST.get("vehicle_status"),
+            "year": int(request.POST.get("year")),
+            "fuel_type": request.POST.get("fuel_type"),
+            "last_maintenance_date": request.POST.get("last_maintenance_date"),
+        }
+        vehicles.update_one({"_id": int(vehicle_id)}, {"$set": updated_data})
+        return redirect("vehicles_list")
+
+    return render(request, "vehicles_edit.html", {"vehicle": vehicle})
+
+
 
 def mail_list(request):
     return render(request, "mail/list.html")
@@ -117,12 +273,66 @@ def mail_detail(request, mail_id):
 @login_required
 @role_required(["driver", "admin"])
 def deliveries_list(request):
-    user_doc = users.find_one({"username": request.user.username})
-    if user_doc["role"] == "driver":
-        all_deliveries = list(deliveries.find({"driver_id": user_doc["_id"]}))
-    else:
-        all_deliveries = list(deliveries.find())
-    return render(request, "deliveries/list.html", {"deliveries": all_deliveries})
+    deliveries_data = list(deliveries.find())
+    deliveries_list = []
+
+    for d in deliveries_data:
+        # Rename MongoDB _id → id (safe for templates)
+        d["id"] = int(d["_id"])  # keep numeric if needed
+        deliveries_list.append(d)
+
+    context = {"deliveries": deliveries_list}
+    return render(request, "deliveries/list.html", context)
+
+@login_required
+def deliveries_detail(request, delivery_id):
+    delivery = deliveries.find_one({"_id": int(delivery_id)})
+    if not delivery:
+        return HttpResponseNotFound("Delivery not found.")
+    return render(request, "deliveries/detail.html", {"delivery": delivery})
+
+
+@login_required
+def deliveries_create(request):
+    """Create a new delivery"""
+    if request.method == "POST":
+        data = {
+            "recipient": request.POST.get("recipient"),
+            "address": request.POST.get("address"),
+            "status": request.POST.get("status", "Pending"),
+        }
+        deliveries.insert_one(data)
+        return redirect("deliveries_list")
+
+    return render(request, "deliveries/create.html")
+
+@login_required
+def deliveries_edit(request, delivery_id):
+    """Edit an existing delivery."""
+    delivery = deliveries.find_one({"_id": ObjectId(delivery_id)})
+    if not delivery:
+        return HttpResponseNotFound("Delivery not found.")
+
+    if request.method == "POST":
+        updated_data = {
+            "recipient": request.POST.get("recipient"),
+            "address": request.POST.get("address"),
+            "status": request.POST.get("status"),
+        }
+        deliveries.update_one({"_id": ObjectId(delivery_id)}, {"$set": updated_data})
+        return redirect("deliveries_list")
+
+    return render(request, "deliveries/edit.html", {"delivery": delivery})
+
+@login_required
+def deliveries_delete(request, delivery_id):
+    """Delete an existing delivery."""
+    delivery = deliveries.find_one({"_id": ObjectId(delivery_id)})
+    if not delivery:
+        return HttpResponseNotFound("Delivery not found.")
+
+    deliveries.delete_one({"_id": ObjectId(delivery_id)})
+    return redirect("deliveries_list")
 
 @login_required
 @role_required(["client", "admin"])

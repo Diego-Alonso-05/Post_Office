@@ -1,14 +1,25 @@
 {% extends 'base.html' %}
-{% block title %}Edit Vehicle — Fast Office{% endblock %}
+{% block title %}Edit Vehicle — Mailly{% endblock %}
 
 {% block content %}
 <div class="card" style="max-width:500px">
   <h3>Edit Vehicle</h3>
   <form method="POST" style="margin-top:12px">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-    <a href="{% url 'vehicles_list' %}" class="btn" style="margin-left:8px">Cancel</a>
+    <label>Plate Number</label>
+    <input type="text" name="plate_number" value="{{ vehicle.plate_number }}" class="form-control" />
+
+    <label>Model</label>
+    <input type="text" name="model" value="{{ vehicle.model }}" class="form-control" />
+
+    <label>Brand</label>
+    <input type="text" name="brand" value="{{ vehicle.brand }}" class="form-control" />
+
+    <label>Status</label>
+    <input type="text" name="vehicle_status" value="{{ vehicle.vehicle_status }}" class="form-control" />
+
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save Changes</button>
+    <a href="{% url 'vehicles_list' %}" class="btn btn-secondary" style="margin-top:10px;">Back</a>
   </form>
 </div>
 {% endblock %}
