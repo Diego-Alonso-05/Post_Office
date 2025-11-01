@@ -10,6 +10,8 @@ from django.http import HttpResponseForbidden
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth import login as auth_login
+from django.shortcuts import redirect
+from django.contrib.auth import logout
 
 client = MongoClient("mongodb://localhost:27017")
 db = client["postoffice"]  # ← o nome da tua base de dados
@@ -44,6 +46,12 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             auth_login(request, user)
+
+            # fetch role from MongoDB
+            mongo_user = users.find_one({"username": username})
+            if mongo_user:
+                request.session["role"] = mongo_user.get("role", "client")  # default to client
+
             return redirect("dashboard")
         else:
             messages.error(request, "Invalid username or password")
@@ -87,6 +95,12 @@ def dashboard(request):
 
 def warehouses_list(request):
     return render(request, "warehouses/list.html")
+
+def logout_view(request):
+    logout(request)
+    request.session.flush()  # clears role from session
+    return redirect("login")
+
 
 @login_required
 @role_required(["admin"])
