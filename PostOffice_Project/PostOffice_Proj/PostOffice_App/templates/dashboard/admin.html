@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard — Mailly{% endblock %}
+{% block content %}
+<div class="grid">
+  <aside class="sidebar card">
+    <h3 style="margin-top:0">Admin</h3>
+    <nav style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+      <a class="btn" href="{% url 'warehouses:list' %}"><i class="fa fa-warehouse"></i> Warehouses</a>
+      <a class="btn" href="{% url 'mail:list' %}"><i class="fa fa-envelope-open"></i> Mail</a>
+      <a class="btn" href="{% url 'vehicles:list' %}"><i class="fa fa-car"></i> Vehicles</a>
+      <a class="btn" href="{% url 'transactions:list' %}"><i class="fa fa-credit-card"></i> Transactions</a>
+      <a class="btn" href="{% url 'deliveries:list' %}"><i class="fa fa-truck"></i> Deliveries</a>
+    </nav>
+  </aside>
+
+  <section>
+    <div class="stats">
+      <div class="stat card">
+        <div class="muted">Total Mail</div>
+        <h3>{{ total_mail }}</h3>
+      </div>
+      <div class="stat card">
+        <div class="muted">Pending Deliveries</div>
+        <h3>{{ pending_deliveries }}</h3>
+      </div>
+      <div class="stat card">
+        <div class="muted">Revenue (30d)</div>
+        <h3>{{ revenue_30d }}</h3>
+      </div>
+    </div>
+
+    <div style="margin-top:18px" class="card">
+      <h4 style="margin:0 0 12px">Recent Activity</h4>
+      <table class="table">
+        <thead>
+          <tr><th>Time</th><th>Event</th><th>Owner</th></tr>
+        </thead>
+        <tbody>
+          {% for event in recent_events %}
+            <tr>
+              <td class="muted" style="width:210px">{{ event.timestamp }}</td>
+              <td>{{ event.summary }}</td>
+              <td class="muted">{{ event.user.get_full_name }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="muted">No activity yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

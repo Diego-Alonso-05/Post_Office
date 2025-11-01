@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Transactions — Mailly{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>Transactions</h3>
+  <table class="table" style="margin-top:12px">
+    <thead><tr><th>Date</th><th>Client</th><th>Mail</th><th>Amount</th><th>Method</th></tr></thead>
+    <tbody>
+      {% for t in transactions %}
+        <tr>
+          <td class="muted">{{ t.date }}</td>
+          <td>{{ t.client.get_full_name }}</td>
+          <td class="muted">{{ t.mail_item.tracking_code }}</td>
+          <td>{{ t.amount }}</td>
+          <td class="muted">{{ t.get_payment_method_display }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No transactions</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

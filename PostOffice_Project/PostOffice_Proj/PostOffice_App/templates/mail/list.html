@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Mail — Mailly{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+  <h3>Mail Items</h3>
+  <a class="btn btn-primary" href="#"></a><i class="fa fa-plus"></i> New Mail</a>
+</div>
+<div class="card" style="margin-top:12px">
+  <table class="table">
+    <thead><tr><th>Tracking</th><th>Sender</th><th>Recipient</th><th>From</th><th>To</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for m in mail_items %}
+        <tr>
+          <td><strong>{{ m.tracking_code }}</strong></td>
+          <td class="muted">{{ m.sender.get_full_name }}</td>
+          <td>{{ m.recipient.get_full_name }}</td>
+          <td class="muted">{{ m.origin_warehouse.name if m.origin_warehouse }}</td>
+          <td class="muted">{{ m.destination_warehouse.name if m.destination_warehouse }}</td>
+          <td>{{ m.get_status_display }}</td>
+          <td style="text-align:right"><a class="btn" href="{% url 'mail:detail' m.id %}">View</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted">No mail items available</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

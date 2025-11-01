@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Register — Page{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card" style="max-width:720px;margin:0 auto">
+    <h2>Create an account</h2>
+    <p class="muted">Sign up as Client, Driver, or Employee.</p>
+    <form method="post">{% csrf_token %}
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1">
+          <label>Full name</label>
+          <input name="full_name" required>
+        </div>
+        <div style="flex:1">
+          <label>Role</label>
+          <select name="role">
+            <option value="client">Client</option>
+            <option value="driver">Driver</option>
+            <option value="employee">Employee</option>
+          </select>
+        </div>
+      </div>
+      <label style="margin-top:12px">Email</label>
+      <input name="email" type="email" required>
+      <label style="margin-top:12px">Password</label>
+      <input name="password1" type="password" required>
+      <label style="margin-top:12px">Confirm password</label>
+      <input name="password2" type="password" required>
+      <div style="margin-top:18px;display:flex;gap:12px">
+        <button class="btn btn-primary" type="submit">Create account</button>
+        <a class="btn" href="{% url 'login' %}">Back to login</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Deliveries — Mailly{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center">
+  <h3>Deliveries</h3>
+  <a class="btn btn-primary" href="#"></a>
+</div>
+<div class="card" style="margin-top:12px">
+  <table class="table">
+    <thead><tr><th>Tracking</th><th>Driver</th><th>Vehicle</th><th>Delivery date</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for d in deliveries %}
+        <tr>
+          <td><strong>{{ d.mail_item.tracking_code }}</strong></td>
+          <td class="muted">{% if d.driver %}{{ d.driver.get_full_name }}{% endif %}</td>
+          <td class="muted">{% if d.vehicle %}{{ d.vehicle.plate_number }}{% endif %}</td>
+          <td class="muted">{{ d.delivery_date }}</td>
+          <td>{{ d.get_status_display }}</td>
+          <td style="text-align:right"><a class="btn" href="{% url 'deliveries:detail' d.id %}">View</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted">No deliveries</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
