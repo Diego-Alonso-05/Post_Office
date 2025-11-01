@@ -50,5 +50,27 @@
     "updated_at": "2025-11-01T12:00:00Z",
     "role": "admin",
     "tax_id": "TAX123456"
+  },
+  {
+    "_id": 4,
+    "username": "staff_joe",
+    "psswd_hash": "hashed_password",
+    "name": "Joe Staff",
+    "contact": "+911111111",
+    "address": "654 Rio Sul, City",
+    "email": "joe@po.com",
+    "created_at": "2025-10-30T09:00:00Z",
+    "updated_at": "2025-11-01T10:00:00Z",
+    "role": "staff",
+    "employee": {
+      "position": "Staff",
+      "schedule": "08:00-16:00",
+      "wage": 15.5,
+      "is_active": true,
+      "hire_date": "2023-03-15"
+    },
+    "staff_info": {
+      "department": "Customer_Service"
+    }
   }
 ]

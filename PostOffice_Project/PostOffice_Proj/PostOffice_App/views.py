@@ -14,7 +14,7 @@ from django.shortcuts import redirect
 from django.contrib.auth import logout
 
 client = MongoClient("mongodb://localhost:27017")
-db = client["postoffice"]  # ← o nome da tua base de dados
+db = client["PostOffice_Proj_MDB"]  # ← o nome da tua base de dados
 deliveries = db["deliveries"]
 notifications = db["notifications"]
 routes = db["routes"]
