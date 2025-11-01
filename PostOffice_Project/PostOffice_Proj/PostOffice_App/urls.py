@@ -8,6 +8,7 @@ urlpatterns = [
     path('vehicles/create/', views.vehicles_create, name='vehicles_create'),
     path('vehicles/<int:vehicle_id>/edit/', views.vehicles_edit, name='vehicles_edit'),
 
+    path('routes/', views.routes_list, name='routes_list'),
 
     path('logout/', views.logout_view, name='logout'),
     path('mail/', views.mail_list, name='mail_list'),
@@ -17,6 +18,8 @@ urlpatterns = [
     path('deliveries/edit/<str:delivery_id>/', views.deliveries_edit, name='deliveries_edit'),
     path('deliveries/delete/<str:delivery_id>/', views.deliveries_delete, name='deliveries_delete'),
     path("deliveries/<str:delivery_id>/", views.deliveries_detail, name="deliveries_detail"),
+    path('deliveries/<int:delivery_id>/edit/', views.deliveries_edit, name='deliveries_edit'),
+
 
     path('profile/', views.client_profile, name='client_profile'),
     path('login/', views.login_view, name='login'),

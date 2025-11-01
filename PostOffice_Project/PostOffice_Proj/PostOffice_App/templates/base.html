@@ -90,6 +90,7 @@
     {% if request.session.role == "admin" %}
         <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
         <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
+	<a class="btn" href="{% url 'routes_list' %}">Routes</a>
         <a class="btn" href="{% url 'mail_list' %}">Mail</a>
         <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
     {% elif request.session.role == "driver" %}

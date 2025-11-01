@@ -76,9 +76,9 @@ WSGI_APPLICATION = 'PostOffice_Proj.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'PostOffice_Project',   # nome da tua BD no pgAdmin4
+        'NAME': 'bdII_14366',   # nome da tua BD no pgAdmin4
         'USER': 'postgres',     # o teu user
-        'PASSWORD': 'postgres',
+        'PASSWORD': 'ir4119jo',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -134,7 +134,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==========================================
 # AUTH
 # ==========================================
-#Rodrigo local DB Connection
-MONGO_URI = "mongodb://localhost:27017"
-MONGO_DB_NAME = "PostOffice_Proj_MDB"
-
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard"

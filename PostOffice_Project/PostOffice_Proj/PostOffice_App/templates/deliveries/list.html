@@ -15,14 +15,14 @@
       <td class="muted">{% if d.driver %}{{ d.driver.name }}{% endif %}</td>
       <td class="muted">{% if d.vehicle %}{{ d.vehicle.plate_number }}{% endif %}</td>
       <td class="muted">{{ d.delivery_date }}</td>
-      <td>{{ d.status }}</td>
       <td style="text-align:right">
-        {% if d.id %}
-          <a class="btn btn-primary" href="{% url 'deliveries_detail' d.id %}">View</a>
-        {% else %}
-          <span class="text-muted">No ID</span>
-        {% endif %}
-      </td>
+  {% if d.id %}
+    <a class="btn btn-primary" href="{% url 'deliveries_detail' d.id %}">View</a>
+    <a class="btn" href="{% url 'deliveries_edit' d.id %}">Edit</a>
+  {% else %}
+    <span class="text-muted">No ID</span>
+  {% endif %}
+</td>
     </tr>
   {% empty %}
     <tr><td colspan="6" class="muted">No deliveries</td></tr>
