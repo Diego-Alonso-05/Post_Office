@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deliveries</title>
+  <style>
+    body {
+      background: #0f1724;
+      color: #e6eef8;
+      font-family: 'Inter', sans-serif;
+      padding: 20px;
+    }
+    a {
+      color: #f6e8c8;
+      text-decoration: none;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #c08a2b, #9a6c1f);
+      color: #071022;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 10px;
+      text-align: left;
+    }
+    select {
+      padding: 8px;
+      border-radius: 8px;
+      background: transparent;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+  <h1>Deliveries</h1>
+
+  <form method="get" style="margin-bottom:20px;">
+    <label>Filter by Post Office:</label>
+    <select name="office" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for o in offices %}
+        <option value="{{ o }}" {% if office_filter == o %}selected{% endif %}>{{ o }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <a href="{% url 'deliveries_create' %}" class="btn">+ New Delivery</a>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tracking</th>
+        <th>Status</th>
+        <th>Post Office</th>
+        <th>Recipient</th>
+        <th>Priority</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in deliveries %}
+      <tr>
+        <td>{{ d.id_delivery }}</td>
+        <td>{{ d.tracking_number }}</td>
+        <td>{{ d.status }}</td>
+        <td>{{ d.post_office }}</td>
+        <td>{{ d.recipient_name }}</td>
+        <td>{{ d.priority }}</td>
+        <td>
+          <a href="{% url 'deliveries_update' d.id_delivery %}">Edit</a> |
+          <a href="{% url 'deliveries_delete' d.id_delivery %}">Delete</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7">No deliveries found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

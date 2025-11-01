@@ -1,0 +1,78 @@
+//Urls
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # DELIVERIES
+    path('deliveries/', views.deliveries_list, name='deliveries_list'),
+    path('deliveries/create/', views.deliveries_create, name='deliveries_create'),
+    path('deliveries/update/<int:pk>/', views.deliveries_update, name='deliveries_update'),
+    path('deliveries/delete/<int:pk>/', views.deliveries_delete, name='deliveries_delete'),
+
+]
+
+//Views
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import user_passes_test
+from .models import Delivery
+from django import forms
+
+
+# ------------------- FORMS -------------------
+
+class DeliveryForm(forms.ModelForm):
+    class Meta:
+        model = Delivery
+        fields = '__all__'
+
+
+# ------------------- DELIVERIES -------------------
+
+def deliveries_list(request):
+    office_filter = request.GET.get('office')
+    if office_filter:
+        deliveries = Delivery.objects.filter(post_office=office_filter)
+    else:
+        deliveries = Delivery.objects.all()
+
+    offices = Delivery.objects.values_list('post_office', flat=True).distinct()
+
+    return render(request, 'deliveries/delivery_list.html', {
+        'deliveries': deliveries,
+        'offices': offices,
+        'office_filter': office_filter,
+    })
+
+
+def deliveries_create(request):
+    if request.method == 'POST':
+        form = DeliveryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('deliveries_list')
+    else:
+        form = DeliveryForm()
+    return render(request, 'deliveries/delivery_form.html', {'form': form, 'title': 'Create Delivery'})
+
+
+def deliveries_update(request, pk):
+    delivery = get_object_or_404(Delivery, pk=pk)
+    if request.method == 'POST':
+        form = DeliveryForm(request.POST, instance=delivery)
+        if form.is_valid():
+            form.save()
+            return redirect('deliveries_list')
+    else:
+        form = DeliveryForm(instance=delivery)
+    return render(request, 'deliveries/delivery_form.html', {'form': form, 'title': 'Edit Delivery'})
+
+
+def deliveries_delete(request, pk):
+    delivery = get_object_or_404(Delivery, pk=pk)
+    if request.method == 'POST':
+        delivery.delete()
+        return redirect('deliveries_list')
+    return render(request, 'deliveries/delivery_confirm_delete.html', {'delivery': delivery})
+
