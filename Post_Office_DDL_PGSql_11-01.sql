@@ -1,6 +1,6 @@
 /*==============================================================*/
 /* DBMS name:      PostgreSQL 9.x                               */
-/* Created on:     01/11/2025 00:47:27                          */
+/* Created on:     01/11/2025 02:01:03                          */
 /*==============================================================*/
 
 
@@ -34,22 +34,17 @@ drop table VEHICLE;
 create table CLIENT (
    USE_ID_USER          INT4                 not null,
    ID_USER              SERIAL               not null,
-   MAIL_ITEM_ID         INT4                 null,
+   ID_DELIVERY          INT4                 null,
    ID_POSTOFFICE_STORE  INT4                 null,
    USERNAME             VARCHAR(20)          null,
    PSSWD_HASH           VARCHAR(50)          null,
-   USE_NAME             VARCHAR(100)         null,
-   USE_CONTACT          VARCHAR(20)          null,
-   USE_ADDRESS          VARCHAR(255)         null,
-   USE_EMAIL            VARCHAR(100)         null,
-   CREATED_AT           DATE                 null,
-   UPDATED_AT           DATE                 null,
-   ROLE                 VARCHAR(16)          null,
    NAME                 VARCHAR(100)         null,
    CONTACT              VARCHAR(20)          null,
    ADDRESS              VARCHAR(255)         null,
    EMAIL                VARCHAR(100)         null,
-   REGISTRATION_DATE    DATE                 null,
+   CREATED_AT           DATE                 null,
+   UPDATED_AT           DATE                 null,
+   ROLE                 VARCHAR(16)          null,
    TAX_ID               VARCHAR(50)          null,
    constraint PK_CLIENT primary key (USE_ID_USER, ID_USER)
 );
@@ -58,7 +53,7 @@ create table CLIENT (
 /* Table: DELIVERY                                              */
 /*==============================================================*/
 create table DELIVERY (
-   MAIL_ITEM_ID         SERIAL               not null,
+   ID_DELIVERY          SERIAL               not null,
    ID_INVOICE           INT4                 null,
    USE_ID_USER          INT4                 null,
    ID_USER              INT4                 null,
@@ -80,7 +75,7 @@ create table DELIVERY (
    REGISTERED_AT        DATE                 null,
    UPDATED_AT           DATE                 null,
    IN_TRANSITION        BOOL                 null,
-   constraint PK_DELIVERY primary key (MAIL_ITEM_ID)
+   constraint PK_DELIVERY primary key (ID_DELIVERY)
 );
 
 /*==============================================================*/
@@ -103,6 +98,7 @@ create table EMPLOYEE (
    SCHEDULE             TEXT                 null,
    WAGE                 DECIMAL(10,2)        null,
    IS_ACTIVE            BOOL                 null,
+   HIRE_DATE            DATE                 null,
    constraint PK_EMPLOYEE primary key (USE_ID_USER, ID_USER)
 );
 
@@ -127,10 +123,12 @@ create table EMPLOYEE_DRIVER (
    SCHEDULE             TEXT                 null,
    WAGE                 DECIMAL(10,2)        null,
    IS_ACTIVE            BOOL                 null,
+   HIRE_DATE            DATE                 null,
    LICENSE_NUMBER       VARCHAR(50)          null,
    LICENSE_CATEGORY     VARCHAR(20)          null,
    LICENSE_EXPIRY_DATE  DATE                 null,
    DRIVING_EXPERIENCE_YEARS INT4                 null,
+   DRIVER_STATUS        VARCHAR(20)          null,
    constraint PK_EMPLOYEE_DRIVER primary key (USE_ID_USER, EMP_ID_USER, ID_USER)
 );
 
@@ -155,6 +153,7 @@ create table EMPLOYEE_STAFF (
    SCHEDULE             TEXT                 null,
    WAGE                 DECIMAL(10,2)        null,
    IS_ACTIVE            BOOL                 null,
+   HIRE_DATE            DATE                 null,
    DEPARTMENT           VARCHAR(32)          null,
    constraint PK_EMPLOYEE_STAFF primary key (USE_ID_USER, EMP_ID_USER, ID_USER)
 );
@@ -164,12 +163,12 @@ create table EMPLOYEE_STAFF (
 /*==============================================================*/
 create table INVOICE (
    ID_INVOICE           SERIAL               not null,
-   USE_ID_USER          INT4                 not null,
-   ID_USER              INT4                 not null,
-   EMP_USE_ID_USER      INT4                 not null,
-   EMP_EMP_ID_USER      INT4                 not null,
-   EMP_ID_USER          INT4                 not null,
    ID_POSTOFFICE_STORE  INT4                 not null,
+   EMP_USE_ID_USER      INT4                 not null,
+   EMP_ID_USER          INT4                 not null,
+   ID_USER              INT4                 not null,
+   USE_ID_USER          INT4                 not null,
+   CLI_ID_USER          INT4                 not null,
    INVOICE_STATUS       VARCHAR(30)          null,
    INVOICE_TYPE         VARCHAR(50)          null,
    QUANTITY             INT4                 null,
@@ -188,7 +187,7 @@ create table INVOICE (
 /*==============================================================*/
 create table NOTIFICATION (
    NOTIFICATION_ID      SERIAL               not null,
-   MAIL_ITEM_ID         INT4                 not null,
+   ID_DELIVERY          INT4                 not null,
    NOTIFICATION_TYPE    VARCHAR(20)          null,
    RECIPIENT_CONTACT    VARCHAR(100)         null,
    SUBJECT              VARCHAR(255)         null,
@@ -219,7 +218,8 @@ create table POST_OFFICE_STORE (
    ADDRESS              VARCHAR(255)         null,
    OPENING_TIME         TIME                 null,
    CLOSING_TIME         TIME                 null,
-   STORE_TYPE           VARCHAR(50)          null,
+   PO_SCHEDULE          TEXT                 null,
+   MAXIMUM_STORAGE      INT4                 null,
    constraint PK_POST_OFFICE_STORE primary key (ID_POSTOFFICE_STORE)
 );
 
@@ -227,12 +227,12 @@ create table POST_OFFICE_STORE (
 /* Table: ROUTE                                                 */
 /*==============================================================*/
 create table ROUTE (
-   ID_DELIVERY_ROUTE    SERIAL               not null,
-   ID_POSTOFFICE_STORE  INT4                 not null,
+   ID_ROUTE             SERIAL               not null,
    USE_ID_USER          INT4                 not null,
    EMP_ID_USER          INT4                 not null,
    ID_USER              INT4                 not null,
-   MAIL_ITEM_ID         INT4                 not null,
+   ID_DELIVERY          INT4                 not null,
+   ID_POSTOFFICE_STORE  INT4                 not null,
    DESCRIPTION          TEXT                 null,
    DELIVERY_STATUS      VARCHAR(20)          null,
    DELIVERY_DATE        DATE                 null,
@@ -241,7 +241,7 @@ create table ROUTE (
    EXPECTED_DURATION    TIME                 null,
    KMS_TRAVELLED        DECIMAL(8,2)         null,
    DRIVER_NOTES         TEXT                 null,
-   constraint PK_ROUTE primary key (ID_DELIVERY_ROUTE)
+   constraint PK_ROUTE primary key (ID_ROUTE)
 );
 
 /*==============================================================*/
@@ -267,7 +267,7 @@ create table "USER" (
 /*==============================================================*/
 create table VEHICLE (
    ID_VEHICLE           SERIAL               not null,
-   ID_DELIVERY_ROUTE    INT4                 not null,
+   ID_ROUTE             INT4                 not null,
    VEHICLE_TYPE         VARCHAR(50)          null,
    PLATE_NUMBER         VARCHAR(20)          null,
    CAPACITY             DECIMAL(10,2)        null,
