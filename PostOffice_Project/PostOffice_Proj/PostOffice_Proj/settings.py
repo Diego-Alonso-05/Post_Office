@@ -55,7 +55,7 @@ ROOT_URLCONF = 'PostOffice_Proj.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'PostOffice_App' / 'templates'],  # ← add this
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -75,8 +75,12 @@ WSGI_APPLICATION = 'PostOffice_Proj.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'bdII_14366',   # nome da tua BD no pgAdmin4
+        'USER': 'postgres',     # o teu user
+        'PASSWORD': 'ir4119jo',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
