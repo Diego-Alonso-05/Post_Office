@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>New Delivery</h2>
+<form method="post">
+  {% csrf_token %}
+  <label>Recipient:</label>
+  <input type="text" name="recipient" required><br>
+  <label>Address:</label>
+  <input type="text" name="address" required><br>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}
