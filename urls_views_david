@@ -1,4 +1,21 @@
+//Urls
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # DELIVERIES
+    path('deliveries/', views.deliveries_list, name='deliveries_list'),
+    path('deliveries/create/', views.deliveries_create, name='deliveries_create'),
+    path('deliveries/update/<int:pk>/', views.deliveries_update, name='deliveries_update'),
+    path('deliveries/delete/<int:pk>/', views.deliveries_delete, name='deliveries_delete'),
+
+]
+
+//Views
+
 from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import user_passes_test
 from .models import Delivery
 from django import forms
 
