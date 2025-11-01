@@ -80,23 +80,19 @@
           <div class="muted" style="font-size:12px">Letters & Packages</div>
         </div>
       </div>
-        <nav class="nav-links">
-          {#  disable this now so it doesn't block pages without log in  #}
-          {#  {% if user.is_authenticated %}  #}
-
-            <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
-            <a class="btn" href="{% url 'warehouses-list' %}">Warehouses</a>
-            <a class="btn" href="{% url 'vehicles-list' %}">Vehicles</a>
-            <a class="btn" href="{% url 'mail-list' %}">Mail</a>
-            <a class="btn" href="{% url 'deliveries-list' %}">Deliveries</a>
-            <a class="btn" href="{% url 'invoices-list' %}">Invoices</a>
-            <a class="btn" href="{% url 'client-profile' %}">Profile</a>
-
-            <a class="btn" href="{% url 'login' %}">Login</a>
-            <a class="btn btn-primary" href="{% url 'register' %}">Register</a>
-
-          {#  {% endif %}  #}
-        </nav>
+       <nav class="nav-links">
+  	<!-- Authenticated area -->
+  	<!-- (You can later re-enable {% if user.is_authenticated %} {% endif %} once login works) -->
+  
+  	<a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
+  	<a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
+ 	<a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
+ 	<a class="btn" href="{% url 'mail_list' %}">Mail</a>
+ 	<a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
+  	<a class="btn" href="{% url 'client_profile' %}">Profile</a>
+  	<a class="btn" href="{% url 'login' %}">Login</a>
+  	<a class="btn btn-primary" href="{% url 'register' %}">Register</a>
+	</nav>
     </header>
 
     <main style="margin-top:22px">

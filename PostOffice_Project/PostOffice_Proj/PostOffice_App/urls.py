@@ -2,16 +2,17 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
+    path('', views.dashboard, name='dashboard'),
+    path('warehouses/', views.warehouses_list, name='warehouses_list'),
+    path('vehicles/', views.vehicles_list, name='vehicles_list'),
 
-    path("login/", views.login_view, name="login"),
-    path("register/", views.register_view, name="register"),
+    path('vehicles/create/', views.vehicles_create, name='vehicles_create'),
+    path('vehicles/edit/<str:vehicle_id>/', views.vehicles_edit, name='vehicles_edit'),
 
-    path("warehouses/", views.warehouses_list, name="warehouses-list"),
-    path("vehicles/", views.vehicles_list, name="vehicles-list"),
-    path("mail/", views.mail_list, name="mail-list"),
-    path("mail/detail/", views.mail_detail, name="mail-detail"),
-    path("deliveries/", views.deliveries_list, name="deliveries-list"),
-    path("invoices/", views.invoices_list, name="invoices-list"),
-    path("profile/", views.client_profile, name="client-profile"),
+    path('mail/', views.mail_list, name='mail_list'),
+    path('mail/<str:mail_id>/', views.mail_detail, name='mail_detail'),
+    path('deliveries/', views.deliveries_list, name='deliveries_list'),
+    path('profile/', views.client_profile, name='client_profile'),
+    path('login/', views.login_view, name='login'),
+    path('register/', views.register_view, name='register'),
 ]

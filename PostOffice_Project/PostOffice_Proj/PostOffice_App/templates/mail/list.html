@@ -14,10 +14,24 @@
           <td><strong>{{ m.tracking_code }}</strong></td>
           <td class="muted">{{ m.sender.get_full_name }}</td>
           <td>{{ m.recipient.get_full_name }}</td>
-          <td class="muted">{{ m.origin_warehouse.name if m.origin_warehouse }}</td>
-          <td class="muted">{{ m.destination_warehouse.name if m.destination_warehouse }}</td>
+          <td class="muted">
+  {% if m.origin_warehouse %}
+    {{ m.origin_warehouse.name }}
+  {% else %}
+    —
+  {% endif %}
+</td>
+
+<td class="muted">
+  {% if m.destination_warehouse %}
+    {{ m.destination_warehouse.name }}
+  {% else %}
+    —
+  {% endif %}
+</td>
+
           <td>{{ m.get_status_display }}</td>
-          <td style="text-align:right"><a class="btn" href="{% url 'mail:detail' m.id %}">View</a></td>
+          <td style="text-align:right"><a class="btn" href="{% url 'mail_detail' m.id %}">View</a></td>
         </tr>
       {% empty %}
         <tr><td colspan="7" class="muted">No mail items available</td></tr>
