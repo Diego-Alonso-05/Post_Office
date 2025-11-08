@@ -2,20 +2,15 @@ import pytest
 from datetime import datetime, timezone
 from pymongo import MongoClient
 
-# Conexión a MongoDB
 client = MongoClient("mongodb://localhost:27017/")
 db = client["post_office_db"]
 
-# Limpiar las colecciones antes de cada test
 @pytest.fixture(autouse=True)
 def clear_collections():
     for col in db.list_collection_names():
         db[col].delete_many({})
     yield
 
-# ============================================================
-#                     CREATE TESTS (MongoDB)
-# ============================================================
 
 @pytest.mark.mongodb
 def test_create_user():
@@ -192,3 +187,8 @@ def test_create_notification():
     result = db.notifications.insert_one(notification)
     assert result.inserted_id is not None
     assert db.notifications.count_documents({}) == 1
+
+
+
+
+
