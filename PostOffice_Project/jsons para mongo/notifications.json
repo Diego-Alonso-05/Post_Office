@@ -1,0 +1,12 @@
+[
+  {
+    "_id": 9001,
+    "notification_type": "email",
+    "recipient_contact": "john@example.com",
+    "subject": "Delivery update",
+    "message": "Your package TRK123456789 is now registered.",
+    "status": "sent",
+    "error_message": null,
+    "created_at": "2025-10-25T15:10:00Z"
+  }
+]
