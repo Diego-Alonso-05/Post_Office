@@ -76,13 +76,9 @@ WSGI_APPLICATION = 'PostOffice_Proj.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-<<<<<<< HEAD
         'NAME': 'PostOffice_Project_v1',   # nome da tua BD no pgAdmin4
-=======
-        'NAME': 'bdII_14366',   # nome da tua BD no pgAdmin4
->>>>>>> b666f4e2d972799c82f192c9db3c9b9643fc4947
         'USER': 'postgres',     # o teu user
-        'PASSWORD': 'ir4119jo',
+        'PASSWORD': 'postgres',
         'HOST': 'localhost',
         'PORT': '5432',
     }
