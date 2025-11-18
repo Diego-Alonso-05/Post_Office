@@ -249,12 +249,112 @@ def routes_list(request):
     return render(request, "routes/list.html", context)
 
 @login_required
-@role_required(["Admin"])
-@login_required
-def vehicles_edit(request, vehicle_id):
-    # vehicle_id is an int, not ObjectId
-    vehicle = vehicles.find_one({"_id": int(vehicle_id)})
+@role_required(["admin"])
+def routes_edit(request, route_id):
 
+    # Convert route ID (may be int or ObjectId)
+    try:
+        lookup_id = int(route_id)
+    except ValueError:
+        try:
+            lookup_id = ObjectId(route_id)
+        except:
+            return HttpResponseNotFound("Invalid route ID")
+
+    route = routes_collection.find_one({"_id": lookup_id})
+    if not route:
+        return HttpResponseNotFound("Route not found")
+
+    if request.method == "POST":
+        updated = {
+            "description": request.POST.get("description"),
+            "delivery_status": request.POST.get("delivery_status"),
+            "vehicle_id": request.POST.get("vehicle_id"),
+            "driver_id": request.POST.get("driver_id"),
+            "origin": {
+                "name": request.POST.get("origin_name"),
+                "code": request.POST.get("origin_code"),
+            },
+            "destination": {
+                "name": request.POST.get("destination_name"),
+                "code": request.POST.get("destination_code"),
+            }
+        }
+
+        routes_collection.update_one({"_id": lookup_id}, {"$set": updated})
+        return redirect("routes_list")
+
+    # Prepare fields for template
+    cleaned_route = {
+        "id": str(route["_id"]),
+        "description": route.get("description", ""),
+        "delivery_status": route.get("delivery_status", route.get("status", "")),
+        "vehicle_id": route.get("vehicle_id", ""),
+        "driver_id": route.get("driver_id", ""),
+        "origin_name": route.get("origin", {}).get("name", ""),
+        "origin_code": route.get("origin", {}).get("code", ""),
+        "destination_name": route.get("destination", {}).get("name", ""),
+        "destination_code": route.get("destination", {}).get("code", ""),
+    }
+
+    return render(request, "routes/edit.html", {"route": cleaned_route})
+
+@login_required
+@role_required(["admin"])
+def routes_create(request):
+
+    if request.method == "POST":
+        description = request.POST.get("description")
+        status = request.POST.get("delivery_status")
+        vehicle_id = request.POST.get("vehicle_id")
+        driver_id = request.POST.get("driver_id")
+
+        origin_name = request.POST.get("origin_name")
+        origin_code = request.POST.get("origin_code")
+
+        destination_name = request.POST.get("destination_name")
+        destination_code = request.POST.get("destination_code")
+
+        # Generate numeric ID (just like vehicles and warehouses)
+        last = routes_collection.find_one(sort=[("_id", -1)])
+        next_id = (last["_id"] + 1) if last else 7001
+
+        data = {
+            "_id": next_id,
+            "description": description,
+            "delivery_status": status,
+            "vehicle_id": vehicle_id,
+            "driver_id": driver_id,
+            "origin": {
+                "name": origin_name,
+                "code": origin_code,
+            },
+            "destination": {
+                "name": destination_name,
+                "code": destination_code,
+            }
+        }
+
+        routes_collection.insert_one(data)
+        return redirect("routes_list")
+
+    return render(request, "routes/create.html")
+
+
+@login_required
+@role_required(["admin"])
+def vehicles_edit(request, vehicle_id):
+
+    # Convert ID to int if possible; fallback to ObjectId
+    try:
+        lookup_id = int(vehicle_id)
+    except ValueError:
+        try:
+            lookup_id = ObjectId(vehicle_id)
+        except:
+            return HttpResponseNotFound("Invalid vehicle ID")
+
+    vehicle = vehicles.find_one({"_id": lookup_id})
     if not vehicle:
         return HttpResponseNotFound("Vehicle not found")
 
@@ -270,11 +370,10 @@ def vehicles_edit(request, vehicle_id):
             "fuel_type": request.POST.get("fuel_type"),
             "last_maintenance_date": request.POST.get("last_maintenance_date"),
         }
-        vehicles.update_one({"_id": int(vehicle_id)}, {"$set": updated_data})
+        vehicles.update_one({"_id": lookup_id}, {"$set": updated_data})
         return redirect("vehicles_list")
 
-    return render(request, "vehicles_edit.html", {"vehicle": vehicle})
-
+    return render(request, "vehicles/edit.html", {"vehicle": vehicle, "vehicle_id": vehicle_id})
 
 
 def mail_list(request):
@@ -359,12 +458,6 @@ def client_profile(request):
     my_deliveries = list(deliveries.find({"client_id": user_doc["_id"]}))
     return render(request, "clients/profile.html", {"deliveries": my_deliveries, "user": user_doc})
 
-class VehicleForm(forms.Form):
-    plate_number = forms.CharField(max_length=10, label="Plate Number")
-    model = forms.CharField(max_length=50)
-    assigned_driver = forms.CharField(max_length=50, required=False)
-    status = forms.ChoiceField(choices=[('active', 'Active'), ('inactive', 'Inactive')])
-
 def vehicles_create(request):
     if request.method == "POST":
         form = VehicleForm(request.POST)
@@ -376,22 +469,3 @@ def vehicles_create(request):
         form = VehicleForm()
     return render(request, 'vehicles/create.html', {'form': form})
 
-def vehicles_edit(request, vehicle_id):
-    # find the vehicle in MongoDB
-    vehicle = vehicles.find_one({"_id": vehicle_id})
-    if not vehicle:
-        return redirect("vehicles_list")  # fallback if not found
-
-    if request.method == "POST":
-        form = VehicleForm(request.POST)
-        if form.is_valid():
-            vehicles.update_one(
-                {"_id": vehicle_id},
-                {"$set": form.cleaned_data}
-            )
-            return redirect("vehicles_list")
-    else:
-        # populate form with existing vehicle data
-        form = VehicleForm(initial=vehicle)
-
-    return render(request, "vehicles/edit.html", {"form": form, "vehicle_id": vehicle_id})

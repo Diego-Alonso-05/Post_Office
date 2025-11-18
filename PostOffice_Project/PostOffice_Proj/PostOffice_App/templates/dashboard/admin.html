@@ -14,7 +14,6 @@
   <nav style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
     {% if request.session.role == "admin" %}
       <a class="btn" href="{% url 'warehouses_list' %}"><i class="fa fa-warehouse"></i> Warehouses</a>
-      <a class="btn" href="{% url 'mail_list' %}"><i class="fa fa-envelope-open"></i> Mail</a>
       <a class="btn" href="{% url 'vehicles_list' %}"><i class="fa fa-car"></i> Vehicles</a>
       <a class="btn" href="{% url 'deliveries_list' %}"><i class="fa fa-truck"></i> Deliveries</a>
     {% elif request.session.role == "driver" %}

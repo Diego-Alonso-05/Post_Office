@@ -6,13 +6,13 @@ urlpatterns = [
     path('warehouses/', views.warehouses_list, name='warehouses_list'),
     path('vehicles/', views.vehicles_list, name='vehicles_list'),
     path('vehicles/create/', views.vehicles_create, name='vehicles_create'),
-    path('vehicles/<int:vehicle_id>/edit/', views.vehicles_edit, name='vehicles_edit'),
+    path('vehicles/<str:vehicle_id>/edit/', views.vehicles_edit, name='vehicles_edit'),
 
     path('routes/', views.routes_list, name='routes_list'),
+    path("routes/<str:route_id>/edit/", views.routes_edit, name="routes_edit"),
+    path("routes/create/", views.routes_create, name="routes_create"),
 
     path('logout/', views.logout_view, name='logout'),
-    path('mail/', views.mail_list, name='mail_list'),
-    path('mail/<str:mail_id>/', views.mail_detail, name='mail_detail'),
     path('deliveries/', views.deliveries_list, name='deliveries_list'),
     path('deliveries/create/', views.deliveries_create, name='deliveries_create'),
     path('deliveries/edit/<str:delivery_id>/', views.deliveries_edit, name='deliveries_edit'),

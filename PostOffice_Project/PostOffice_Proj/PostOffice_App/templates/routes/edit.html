@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Edit Route — Mailly{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:600px; margin:0 auto;">
+  <h3>Edit Route</h3>
+
+  <form method="POST" style="margin-top:16px;">
+    {% csrf_token %}
+
+    <!-- DESCRIPTION -->
+    <label>Description</label>
+    <input type="text" name="description" class="form-control"
+           value="{{ route.description }}" required />
+
+    <!-- STATUS -->
+    <label style="margin-top:12px;">Status</label>
+    <input type="text" name="delivery_status" class="form-control"
+           value="{{ route.delivery_status }}" required />
+
+    <!-- VEHICLE -->
+    <label style="margin-top:12px;">Vehicle ID</label>
+    <input type="text" name="vehicle_id" class="form-control"
+           value="{{ route.vehicle_id }}" required />
+
+    <!-- DRIVER -->
+    <label style="margin-top:12px;">Driver ID</label>
+    <input type="text" name="driver_id" class="form-control"
+           value="{{ route.driver_id }}" required />
+
+    <!-- ORIGIN -->
+    <h4 style="margin-top:18px;">Origin</h4>
+
+    <label>Name</label>
+    <input type="text" name="origin_name" class="form-control"
+           value="{{ route.origin_name }}" required />
+
+    <label style="margin-top:12px;">Code</label>
+    <input type="text" name="origin_code" class="form-control"
+           value="{{ route.origin_code }}" />
+
+    <!-- DESTINATION -->
+    <h4 style="margin-top:18px;">Destination</h4>
+
+    <label>Name</label>
+    <input type="text" name="destination_name" class="form-control"
+           value="{{ route.destination_name }}" required />
+
+    <label style="margin-top:12px;">Code</label>
+    <input type="text" name="destination_code" class="form-control"
+           value="{{ route.destination_code }}" />
+
+    <!-- ACTION BUTTONS -->
+    <div style="margin-top:16px; display:flex; gap:12px;">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{% url 'routes_list' %}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

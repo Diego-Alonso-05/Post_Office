@@ -3,40 +3,91 @@
 
 {% block content %}
 <div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h3>Vehicles</h3>
+
+  <!-- Header -->
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Vehicles</h3>
     <a class="btn btn-primary" href="{% url 'vehicles_create' %}">
       <i class="fa fa-plus"></i> Add Vehicle
     </a>
   </div>
 
-  <table class="table" style="margin-top:12px">
+  <!-- Table -->
+  <table class="table" style="margin-top:16px;">
     <thead>
       <tr>
         <th>Plate</th>
         <th>Model</th>
         <th>Brand</th>
         <th>Status</th>
-        <th style="text-align:right"></th>
+        <th>Year</th>
+        <th>Fuel</th>
+        <th>Capacity</th>
+        <th>Last Maintenance</th>
+        <th style="width:120px; text-align:right;">Actions</th>
       </tr>
     </thead>
+
     <tbody>
       {% for v in vehicles %}
-        <tr>
-          <td>{{ v.plate_number }}</td>
-          <td class="muted">{{ v.model }}</td>
-          <td class="muted">{{ v.brand }}</td>
-          <td>{{ v.vehicle_status }}</td>
-          <td style="text-align:right">
-            <a class="btn" href="{% url 'vehicles_edit' v.id %}">Edit</a>
-          </td>
-        </tr>
+      <tr>
+        <td><strong>{{ v.plate_number }}</strong></td>
+        <td class="muted">{{ v.model }}</td>
+        <td class="muted">{{ v.brand }}</td>
+
+        <td>
+          {% if v.vehicle_status %}
+            {{ v.vehicle_status|title }}
+          {% else %}
+            <span class="muted">Unknown</span>
+          {% endif %}
+        </td>
+
+        <td class="muted">
+          {% if v.year %}
+            {{ v.year }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+        <td class="muted">
+          {% if v.fuel_type %}
+            {{ v.fuel_type|title }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+        <td class="muted">
+          {% if v.capacity %}
+            {{ v.capacity }} kg
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+        <td class="muted">
+          {% if v.last_maintenance_date %}
+            {{ v.last_maintenance_date }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+        <td style="text-align:right;">
+          <a class="btn" href="{% url 'vehicles_edit' v.id %}">Edit</a>
+        </td>
+      </tr>
       {% empty %}
-        <tr>
-          <td colspan="5" class="muted">No vehicles</td>
-        </tr>
+      <tr>
+        <td colspan="9" class="muted" style="text-align:center; padding:16px;">
+          No vehicles
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
+
   </table>
 </div>
 {% endblock %}

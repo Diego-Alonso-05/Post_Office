@@ -78,42 +78,22 @@
           <div class="muted" style="font-size:12px">Letters & Packages</div>
         </div>
       </div>
-
-<<<<<<< HEAD
       <nav class="nav-links">
         {% if request.user.is_authenticated %}
           <!-- Dashboard is always visible for logged-in users -->
           <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
-=======
-    <!-- Links per role -->
-    {% if request.session.role == "admin" %}
-        <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
-        <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
-	<a class="btn" href="{% url 'routes_list' %}">Routes</a>
-        <a class="btn" href="{% url 'mail_list' %}">Mail</a>
-        <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-    {% elif request.session.role == "driver" %}
-        <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-    {% elif request.session.role == "client" %}
-        <a class="btn" href="{% url 'client_profile' %}">Profile</a>
-    {% endif %}
->>>>>>> b666f4e2d972799c82f192c9db3c9b9643fc4947
-
           <!-- Links per role -->
           {% if request.session.role == "admin" %}
               <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
               <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
-              <a class="btn" href="{% url 'mail_list' %}">Mail</a>
+        <a class="btn" href="{% url 'routes_list' %}">Routes</a>
               <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-
           {% elif request.session.role == "driver" %}
               <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
-
           {% elif request.session.role == "client" %}
               <a class="btn" href="{% url 'client_profile' %}">Profile</a>
-              <!-- NEW: Invoice link for client -->
-              <a class="btn" href="{% url 'invoice_list' %}">Invoices</a>
           {% endif %}
+          <!-- Links per role -->
 
           <!-- Logout -->
           <a class="btn" href="{% url 'logout' %}">Logout</a>
