@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Deliveries — Mailly{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center">
+  <h3>Deliveries</h3>
+  {# Show the Create button only to admins and staff. Django templates cannot evaluate Python list literals. #}
+  {% if request.user.role == 'admin' or request.user.role == 'staff' %}
+    <a class="btn btn-primary" href="{% url 'deliveries_create' %}">+ New Delivery</a>
+  {% endif %}
+</div>
+<div class="card" style="margin-top:12px">
+  <table class="table">
+    <thead><tr><th>Tracking</th><th>Driver</th><th>Vehicle</th><th>Delivery date</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for d in deliveries %}
+        <tr>
+          <td><strong>{{ d.tracking_number }}</strong></td>
+          <td class="muted">{% if d.driver %}{{ d.driver.user.get_full_name }}{% else %}-{% endif %}</td>
+          <td class="muted">{% if d.vehicle %}{{ d.vehicle.plate_number }}{% else %}-{% endif %}</td>
+          <td class="muted">{{ d.delivery_date }}</td>
+          <td class="muted">{{ d.status }}</td>
+          <td style="text-align:right">
+            {% if d.id %}
+              <a class="btn btn-primary" href="{% url 'deliveries_detail' d.id %}">View</a>
+              {% if request.user.role == 'admin' or request.user.role == 'staff' %}<a class="btn" href="{% url 'deliveries_edit' d.id %}">Edit</a>{% endif %}
+            {% else %}
+              <span class="text-muted">No ID</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted">No deliveries</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
