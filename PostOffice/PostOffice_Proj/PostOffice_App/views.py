@@ -789,8 +789,11 @@ def warehouses_export_json(request):
 def warehouses_import_json(request):
     if request.method == "POST":
         form = WarehouseImportForm(request.POST, request.FILES)
+
         if form.is_valid():
             file = request.FILES["file"]
+
+            # Load JSON safely
             try:
                 data = json.load(file)
             except Exception:
@@ -802,23 +805,67 @@ def warehouses_import_json(request):
                 return redirect("warehouses_import_json")
 
             count = 0
-            for item in data:
-                if not isinstance(item, dict):
+
+            for raw in data:
+                if not isinstance(raw, dict):
                     continue
 
-                Warehouse.objects.create(
-                    name=item.get("name", ""),
-                    address=item.get("address") or item.get("location", ""),
-                    contact=item.get("contact", ""),
-                    po_schedule_open=item.get("po_schedule_open") or "09:00:00",
-                    po_schedule_close=item.get("po_schedule_close") or "18:00:00",
-                    maximum_storage_capacity=item.get("maximum_storage_capacity")
-                    or item.get("capacity", 0),
+                item = dict(raw)  # isolate mutation
+
+                # =====================================================
+                # 1. STRIP ANY PRIMARY KEY FIELD (absolute protection)
+                # =====================================================
+                for key in list(item.keys()):
+                    if "id" in key.lower():
+                        item.pop(key, None)
+
+                # =====================================================
+                # 2. MAP BOTH IMPORT & EXPORT FIELD NAMES
+                #    Export JSON uses:
+                #        address → string
+                #        maximum_storage_capacity → integer
+                # =====================================================
+                name = item.get("name")
+
+                address = (
+                    item.get("address")
+                    or item.get("location")       # if earlier schema used location
                 )
+
+                contact = item.get("contact")
+
+                po_open = item.get("po_schedule_open")
+                po_close = item.get("po_schedule_close")
+
+                max_capacity = (
+                    item.get("maximum_storage_capacity")
+                    or item.get("capacity")       # fallback
+                )
+
+                # =====================================================
+                # 3. VALIDATE required NOT NULL fields manually
+                # =====================================================
+                if not name or not address:
+                    # do not import incomplete rows
+                    continue
+
+                # =====================================================
+                # 4. CREATE SAFE NEW WAREHOUSE ENTRY
+                # =====================================================
+                Warehouse.objects.create(
+                    name=name,
+                    address=address,
+                    contact=contact,
+                    po_schedule_open=po_open,
+                    po_schedule_close=po_close,
+                    maximum_storage_capacity=max_capacity,
+                )
+
                 count += 1
 
             messages.success(request, f"Imported {count} warehouses successfully.")
             return redirect("warehouses_list")
+
     else:
         form = WarehouseImportForm()
 
