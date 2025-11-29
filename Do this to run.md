@@ -18,3 +18,5 @@ Then try running it
 Then try it
     py manage.py runserver
 
+The users that were defined in the DB DML are in the README.md
+
