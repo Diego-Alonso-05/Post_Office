@@ -4,6 +4,12 @@ Driver user: driveruser / password123
 Staff user: staffuser / password123
 Manager user: manageruser / password123
 
+# TO FINISH:
+    1. Admin panels should import/export data to json/csv
+    2. Fix invoice:
+        "lines" on pgsql
+        Trigger to calcutate total of invoice costs and stored it in an additional field
+    4. TP13
 
 ### Updated DB:
 - Now runs fully on **PostgreSQL** for all operational data while keeping **MongoDB only for notifications**.
