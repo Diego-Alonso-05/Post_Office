@@ -18,8 +18,5 @@ Run DML script(PostOffice\populate_data.sql) inside PgAdmin query tool to load d
 Then try running it
     py manage.py runserver
 
-Then try it
-    py manage.py runserver
-
 The users that were defined in the DB DML are in the README.md
 
