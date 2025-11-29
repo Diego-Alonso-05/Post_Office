@@ -3,6 +3,9 @@
 {% block content %}
 <div style="display:flex; justify-content:space-between; align-items:center;">
     <h3>Invoices</h3>
+    <a class="btn btn-secondary" href="{% url 'invoices_export_csv' %}">
+    Export CSV
+    </a>
 
     <a class="btn btn-primary" href="{% url 'invoices_export_json' %}">
         Export JSON

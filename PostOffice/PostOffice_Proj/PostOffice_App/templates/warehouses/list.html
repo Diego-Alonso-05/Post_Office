@@ -8,11 +8,18 @@
       <a class="btn btn-primary" href="{% url 'warehouses_create' %}">
         <i class="fa fa-plus"></i> Add Warehouse
       </a>
+
       <a href="{% url 'warehouses_export_json' %}" class="btn btn-secondary">Export JSON</a>
       <a href="{% url 'warehouses_import_json' %}" class="btn btn-secondary">Import JSON</a>
 
+      <!-- Botón añadido para Export CSV -->
+      <a href="{% url 'warehouses_export_csv' %}" class="btn btn-info">
+        Export CSV
+      </a>
+
     {% endif %}
   </div>
+
   <table class="table" style="margin-top:16px;">
     <thead>
       <tr>
@@ -35,7 +42,6 @@
           <td class="muted">{{ w.po_schedule_close }}</td>
           <td class="muted">{{ w.maximum_storage_capacity }}</td>
           <td style="text-align:right;">
-            {# Django templates do not support Python list literals in ``in`` expressions. #}
             {% if request.user.role == 'admin' or request.user.role == 'staff' %}
               <a class="btn" href="{% url 'warehouses_edit' w.id %}">Edit</a>
             {% endif %}

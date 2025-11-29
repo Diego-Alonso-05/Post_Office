@@ -60,4 +60,13 @@ urlpatterns = [
     path("invoices/export/json/", views.invoices_export_json, name="invoices_export_json"),
     path("invoices/create/", views.invoice_form, name="invoice_create"),
     path("invoices/<int:invoice_id>/edit/", views.invoice_form, name="invoice_edit"),
+
+
+    # CSV export views (PostgreSQL functions)
+    path("vehicles/export/csv/", views.vehicles_export_csv, name="vehicles_export_csv"),
+    path("warehouses/export/csv/", views.warehouses_export_csv, name="warehouses_export_csv"),
+    path("deliveries/export/csv/", views.deliveries_export_csv, name="deliveries_export_csv"),
+    path("routes/export/csv/", views.routes_export_csv_pg, name="routes_export_csv"),
+    path("invoices/export/csv/", views.invoices_export_csv, name="invoices_export_csv"),
+
 ]

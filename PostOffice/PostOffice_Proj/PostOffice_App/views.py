@@ -1139,3 +1139,107 @@ def invoices_export_json(request):
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename=\"invoices_export.json\"'
     return response
+
+
+
+from django.db import connection
+from django.http import HttpResponse
+@login_required
+@role_required(["admin", "manager"])
+def vehicles_export_csv(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_vehicles_csv();")
+        rows = cursor.fetchall()
+
+    header = "id_vehicle,plate,brand,model,capacity,available\n"
+    csv_data = header + "\n".join(r[0] for r in rows)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="vehicles_export.csv"'
+    return response
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_export_csv(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_warehouses_csv();")
+        rows = cursor.fetchall()
+
+    header = "id_warehouse,name,address,contact,capacity\n"
+    csv_data = header + "\n".join(r[0] for r in rows)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="warehouses_export.csv"'
+    return response
+@login_required
+@role_required(["admin", "manager"])
+def deliveries_export_csv(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_deliveries_csv();")
+        rows = cursor.fetchall()
+
+    header = (
+        "id_delivery,tracking_number,status,weight,type,fragile,"
+        "sender_name,sender_address,sender_contact,"
+        "receiver_name,receiver_address,receiver_contact,"
+        "route_id,warehouse_id\n"
+    )
+
+    csv_data = header + "\n".join(r[0] for r in rows)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="deliveries_export.csv"'
+    return response
+@login_required
+@role_required(["admin", "manager"])
+def routes_export_csv_pg(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_routes_csv();")
+        rows = cursor.fetchall()
+
+    header = (
+        "id_route,description,delivery_status,"
+        "vehicle_id,driver_id,"
+        "origin_name,origin_address,origin_contact,"
+        "destination_name,destination_address,destination_contact,"
+        "delivery_date,delivery_start_time,delivery_end_time,"
+        "kms_travelled,expected_duration,driver_notes\n"
+    )
+
+    csv_data = header + "\n".join(r[0] for r in rows)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="routes_export.csv"'
+    return response
+@login_required
+@role_required(["admin", "manager"])
+def invoices_export_csv(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_invoices_csv();")
+        rows = cursor.fetchall()
+
+    header = (
+        "id_invoice,invoice_datetime,invoice_status,invoice_type,"
+        "name,address,contact,cost,quantity,paid,payment_method,user_id\n"
+    )
+
+    csv_data = header + "\n".join(r[0] for r in rows)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="invoices_export.csv"'
+    return response
+
+
+
+
+
+def invoices_export_csv(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_invoices_csv();")
+        rows = cursor.fetchall()
+
+    content = "id_invoice,invoice_status,invoice_type,quantity,invoice_datetime,cost,paid,payment_method,name,address,contact,user_id\n"
+    content += "\n".join(row[0] for row in rows)
+
+    response = HttpResponse(content, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="invoices.csv"'
+    return response
