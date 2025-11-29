@@ -11,6 +11,24 @@ Manager user: manageruser / password123
         Trigger to calcutate total of invoice costs and stored it in an additional field
     4. TP13
 
+# Implemented on 29/11/25
+- 0002_triggers_integracion.py -> **Functions and Triggers**
+fn_update_delivery_timestamp()
+fn_log_delivery_created()
+fn_log_delivery_status_change()
+fn_validate_delivery()
+fn_validate_invoice()
+fn_validate_driver()
+fn_route_status()
+and recreates triggers for each model
+
+- 0003_export_functions.py -> **CSV Export pgSQL**
+export_warehouses_csv()
+export_vehicles_csv()
+export_routes_csv()
+export_deliveries_csv()
+export_invoices_csv()
+
 ### Updated DB:
 - Now runs fully on **PostgreSQL** for all operational data while keeping **MongoDB only for notifications**.
 - Django ORM is the core interface for all business models, giving strong relational integrity and predictable CRUD behavior.

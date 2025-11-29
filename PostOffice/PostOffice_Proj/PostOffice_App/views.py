@@ -1,4 +1,7 @@
 from functools import wraps
+from datetime import date, time, timedelta, datetime
+import json
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
@@ -6,12 +9,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.http import (
+    HttpResponse,
     HttpResponseForbidden,
     HttpResponseNotFound,
     HttpResponseBadRequest,
 )
 from django.shortcuts import render, redirect, get_object_or_404
-from datetime import time
+from django.db import connection
 
 from pymongo import MongoClient  # kept ONLY for notifications
 
@@ -35,10 +39,10 @@ from .forms import (
     InvoiceForm,
     RouteForm,
     DeliveryForm,
-    VehicleImportForm,  
+    VehicleImportForm,
     WarehouseImportForm,
     DeliveryImportForm,
-    RouteImportForm, 
+    RouteImportForm,
 )
 
 
@@ -50,24 +54,9 @@ mongo_client = MongoClient("mongodb://localhost:27017")
 mongo_db = mongo_client["postoffice"]
 notifications_collection = mongo_db["notifications"]  # still in MongoDB
 
-# Helper to record notifications in MongoDB.
-# Wrap insertion in a simple function to allow optional use later
-def create_notification(notification_type, recipient_contact, subject, message, status="pending"):
-    """Insert a notification document into MongoDB.
 
-    Parameters
-    ----------
-    notification_type : str
-        A short tag describing the notification purpose.
-    recipient_contact : str
-        Contact details for the recipient (email/phone).
-    subject : str
-        Subject line or title for the notification.
-    message : str
-        Full notification body.
-    status : str, optional
-        Initial status of the notification, defaulting to ``pending``.
-    """
+def create_notification(notification_type, recipient_contact, subject, message, status="pending"):
+    """Insert a notification document into MongoDB."""
     try:
         notifications_collection.insert_one(
             {
@@ -80,7 +69,7 @@ def create_notification(notification_type, recipient_contact, subject, message, 
             }
         )
     except Exception:
-        # Swallow Mongo exceptions to avoid impacting main flow
+        # Avoid breaking core flow if Mongo is down
         pass
 
 
@@ -118,7 +107,6 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             auth_login(request, user)
-            # role is stored on User model now; no need to fetch from Mongo
             request.session["role"] = user.role
             return redirect("dashboard")
         else:
@@ -153,9 +141,6 @@ def dashboard(request):
     role = request.user.role
 
     if role == "admin":
-        # Provide a richer overview for administrators.  Include employees,
-        # invoices and route/delivery breakdowns.  Completed and cancelled routes
-        # are excluded from the active count.
         stats = {
             "total_vehicles": Vehicle.objects.count(),
             "total_deliveries": Delivery.objects.count(),
@@ -167,23 +152,16 @@ def dashboard(request):
         }
     elif role == "driver":
         employee = getattr(request.user, "employee", None)
-        if employee:
-            my_deliveries = Delivery.objects.filter(driver=employee)
-        else:
-            my_deliveries = Delivery.objects.none()
-        stats = {
-            "my_deliveries": my_deliveries,
-        }
-    else:  # client, staff, manager etc. -> show client deliveries
-        stats = {
-            "my_deliveries": Delivery.objects.filter(client=request.user),
-        }
+        my_deliveries = Delivery.objects.filter(driver=employee) if employee else Delivery.objects.none()
+        stats = {"my_deliveries": my_deliveries}
+    else:  # client, staff, manager
+        stats = {"my_deliveries": Delivery.objects.filter(client=request.user)}
 
     return render(request, "dashboard/admin.html", {"stats": stats, "role": role})
 
 
 # ==========================================================
-#  HOME (from views1.py)
+#  HOME
 # ==========================================================
 
 def home(request):
@@ -191,7 +169,7 @@ def home(request):
 
 
 # ==========================================================
-#  USER & CLIENT MANAGEMENT (in spirit of views1.py)
+#  USER & CLIENT MANAGEMENT
 # ==========================================================
 
 @login_required
@@ -217,8 +195,7 @@ def users_form(request, user_id=None):
     if request.method == "POST":
         form = FormClass(request.POST, instance=user)
         if form.is_valid():
-            saved_user = form.save()
-            # if creating, we might want a default role; leave as chosen in form
+            form.save()
             return redirect("users_list")
     else:
         form = FormClass(instance=user)
@@ -260,8 +237,7 @@ def clients_form(request, user_id=None):
 
 
 # ==========================================================
-#  EMPLOYEES (list only; CRUD can be done in admin for now)
-#  Keeps spirit of views1.py but adapted to new models
+#  EMPLOYEES
 # ==========================================================
 
 @login_required
@@ -277,44 +253,30 @@ def employees_list(request):
 @login_required
 @role_required(["admin"])
 def employees_form(request, employee_id=None):
-    """
-    Basic employee + driver/staff creation/edit.
-    Assumes the User already exists and is linked.
-    For simplicity, expect a 'user_id' hidden/choice field in the template.
-    """
     if employee_id:
         employee = get_object_or_404(Employee, pk=employee_id)
     else:
         employee = None
 
     if request.method == "POST":
-        # Expect a user_id in POST to attach this employee to a User.  Validate
-        # both existence and role suitability.  Only non-client and non-admin
-        # users may be converted into employees.  For edits, ensure the
-        # provided user matches the current employee.
         user_id = request.POST.get("user_id")
         if not user_id:
             return HttpResponseBadRequest("Missing user selection for employee.")
         user = get_object_or_404(User, pk=user_id)
-        # Reject attempts to tie an employee to a user with an unsuitable role
+
         if employee is None and user.role in {"admin", "client"}:
             return HttpResponseBadRequest("Selected user cannot become an employee.")
-        # Prevent multiple Employee records for the same user
         if employee is None and hasattr(user, "employee"):
             return HttpResponseBadRequest("User is already assigned to an employee record.")
-        # If editing, ensure the provided user matches the existing record
         if employee is not None and employee.user_id != user.pk:
             return HttpResponseBadRequest("User mismatch: cannot reassign existing employee to a different user.")
 
-        # Create new Employee instance if necessary
         if employee is None:
             employee = Employee(user=user)
 
-        # Keep track of the original position in case it changes
         old_position = employee.position if employee.pk else None
         emp_form = EmployeeForm(request.POST, instance=employee)
 
-        # Decide which specialized form to use based on requested position
         position = request.POST.get("position")
         driver_form = staff_form = None
         if position == "Driver":
@@ -324,7 +286,6 @@ def employees_form(request, employee_id=None):
             staff_info = getattr(employee, "staff_info", None)
             staff_form = EmployeeStaffForm(request.POST, instance=staff_info)
 
-        # Validate base and specialized forms
         forms_valid = emp_form.is_valid()
         if driver_form:
             forms_valid = forms_valid and driver_form.is_valid()
@@ -332,11 +293,8 @@ def employees_form(request, employee_id=None):
             forms_valid = forms_valid and staff_form.is_valid()
 
         if forms_valid:
-            # Save the base employee record
             saved_employee = emp_form.save()
 
-            # If the role changed between driver and staff, clean up the old
-            # specialized record to avoid orphans
             if old_position and old_position != position:
                 try:
                     if old_position == "Driver" and hasattr(saved_employee, "driver_info"):
@@ -350,7 +308,6 @@ def employees_form(request, employee_id=None):
                 driver_model = driver_form.save(commit=False)
                 driver_model.employee = saved_employee
                 driver_model.save()
-                # synchronize the associated user role
                 saved_employee.user.role = "driver"
                 saved_employee.user.save(update_fields=["role"])
             elif position == "Staff" and staff_form:
@@ -362,8 +319,6 @@ def employees_form(request, employee_id=None):
 
             return redirect("employees_list")
     else:
-        # For GET requests, provide initial forms.  Pre-populate specialized
-        # forms if they exist on the employee instance.
         emp_form = EmployeeForm(instance=employee)
         driver_info = getattr(employee, "driver_info", None) if employee else None
         staff_info = getattr(employee, "staff_info", None) if employee else None
@@ -412,7 +367,6 @@ def invoice_form(request, invoice_id=None):
         form = InvoiceForm(request.POST, instance=invoice)
         if form.is_valid():
             invoice_obj = form.save()
-            # Notify the user associated with the invoice, if any
             if invoice_obj.user and invoice_obj.user.contact:
                 create_notification(
                     notification_type="invoice_updated" if invoice_id else "invoice_created",
@@ -428,7 +382,7 @@ def invoice_form(request, invoice_id=None):
 
 
 # ==========================================================
-#  WAREHOUSES (SQL instead of Mongo)
+#  WAREHOUSES
 # ==========================================================
 
 @login_required
@@ -479,11 +433,6 @@ def warehouses_edit(request, warehouse_id):
 @login_required
 @role_required(["admin"])
 def warehouses_delete(request, warehouse_id):
-    """Delete a warehouse.  Requires a POST request to prevent CSRF via GET.
-
-    If a non-POST request is received, a 400 response is returned.  A
-    confirmation template could be implemented separately if desired.
-    """
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
     warehouse = get_object_or_404(Warehouse, pk=warehouse_id)
@@ -496,7 +445,7 @@ def warehouses_delete(request, warehouse_id):
 
 
 # ==========================================================
-#  VEHICLES (SQL instead of Mongo)
+#  VEHICLES
 # ==========================================================
 
 @login_required
@@ -520,7 +469,6 @@ def vehicles_list(request):
     paginator = Paginator(vehicles_qs, 10)
     page_number = request.GET.get("page")
     vehicles_page = paginator.get_page(page_number)
-    # templates can use vehicle.id directly
     return render(request, "vehicles/list.html", {"vehicles": vehicles_page})
 
 
@@ -547,7 +495,6 @@ def vehicles_edit(request, vehicle_id):
 @login_required
 @role_required(["admin"])
 def vehicles_delete(request, vehicle_id):
-    """Delete a vehicle.  Must be invoked via POST for CSRF safety."""
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
     vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
@@ -560,7 +507,7 @@ def vehicles_delete(request, vehicle_id):
 
 
 # ==========================================================
-#  ROUTES (SQL instead of Mongo)
+#  ROUTES
 # ==========================================================
 
 @login_required
@@ -605,7 +552,6 @@ def routes_edit(request, route_id):
 @login_required
 @role_required(["admin"])
 def routes_delete(request, route_id):
-    """Delete a route.  Requires a POST request to avoid accidental deletion."""
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
     route = get_object_or_404(Route, pk=route_id)
@@ -618,14 +564,13 @@ def routes_delete(request, route_id):
 
 
 # ==========================================================
-#  DELIVERIES (SQL instead of Mongo)
+#  DELIVERIES
 # ==========================================================
 
 @login_required
 @role_required(["driver", "admin", "client", "staff", "manager"])
 def deliveries_list(request):
     role = request.user.role
-    # Determine the base queryset according to role
     if role in {"admin", "manager", "staff"}:
         deliveries_qs = Delivery.objects.select_related("driver", "client", "route").all()
     elif role == "driver":
@@ -633,7 +578,7 @@ def deliveries_list(request):
         deliveries_qs = Delivery.objects.filter(driver=employee) if employee else Delivery.objects.none()
     else:  # client
         deliveries_qs = Delivery.objects.filter(client=request.user)
-    # Paginate the deliveries so that long lists do not overload the page
+
     paginator = Paginator(deliveries_qs, 10)
     page_number = request.GET.get("page")
     deliveries_page = paginator.get_page(page_number)
@@ -653,9 +598,7 @@ def deliveries_create(request):
         form = DeliveryForm(request.POST)
         if form.is_valid():
             new_delivery = form.save()
-            # Optionally send a notification to the client about the new delivery
             recipient = None
-            # Prefer the linked client contact if available
             if new_delivery.client and new_delivery.client.contact:
                 recipient = new_delivery.client.contact
             elif new_delivery.recipient_email:
@@ -693,7 +636,6 @@ def deliveries_edit(request, delivery_id):
 @login_required
 @role_required(["admin"])
 def deliveries_delete(request, delivery_id):
-    """Delete a delivery.  Only accepts POST requests to mitigate CSRF."""
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
     delivery = get_object_or_404(Delivery, pk=delivery_id)
@@ -706,7 +648,7 @@ def deliveries_delete(request, delivery_id):
 
 
 # ==========================================================
-#  CLIENT PROFILE (based on role, uses SQL instead of Mongo)
+#  CLIENT PROFILE
 # ==========================================================
 
 @login_required
@@ -716,7 +658,6 @@ def client_profile(request):
         my_deliveries = Delivery.objects.filter(client=request.user)
         user_obj = request.user
     else:
-        # admin sees nothing special here unless extended with query param
         my_deliveries = Delivery.objects.none()
         user_obj = request.user
 
@@ -728,7 +669,7 @@ def client_profile(request):
 
 
 # ==========================================================
-#  SIMPLE MAIL PAGES (static / placeholder)
+#  SIMPLE MAIL PAGES
 # ==========================================================
 
 def mail_list(request):
@@ -739,46 +680,33 @@ def mail_detail(request, mail_id):
     return render(request, "mail/detail.html", {"mail_id": mail_id})
 
 
-
-
 # ==========================================================
-#  VEHICLES EXPORT (DOWNLOAD JSON FILE)
+#  JSON EXPORTS (Django side) + IMPORTS
 # ==========================================================
-
-import json
-from django.http import HttpResponse
-from django.db import connection
 
 @login_required
 @role_required(["admin", "manager", "staff"])
 def vehicles_export_json(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT exportar_vehicles();")
-        data = cursor.fetchone()[0]
+    vehicles = list(Vehicle.objects.all().values())
+    cleaned = []
+    for v in vehicles:
+        v = dict(v)
+        lm = v.get("last_maintenance_date")
+        if isinstance(lm, (date, datetime)):
+            v["last_maintenance_date"] = lm.isoformat()
+        cleaned.append(v)
 
-    # Convertir en JSON bonito (indentado)
-    json_data = json.dumps(data, indent=4)
-
-    # Preparar archivo descargable
-    response = HttpResponse(json_data, content_type='application/json')
-    response['Content-Disposition'] = 'attachment; filename="vehicles_export.json"'
-
+    json_data = json.dumps(cleaned, indent=4)
+    response = HttpResponse(json_data, content_type="application/json")
+    response["Content-Disposition"] = 'attachment; filename="vehicles_export.json"'
     return response
 
-
-# ==========================================================
-#  VEHICLES IMPORT (UPLOAD JSON FILE)
-# ==========================================================
-
-import json
-from django.contrib import messages
 
 @login_required
 @role_required(["admin", "manager"])
 def vehicles_import_json(request):
     if request.method == "POST":
         form = VehicleImportForm(request.POST, request.FILES)
-
         if form.is_valid():
             file = request.FILES["file"]
 
@@ -788,7 +716,6 @@ def vehicles_import_json(request):
                 messages.error(request, "Invalid JSON file.")
                 return redirect("vehicles_import_json")
 
-            # Validate JSON is a list
             if not isinstance(data, list):
                 messages.error(request, "JSON must contain a list of vehicles.")
                 return redirect("vehicles_import_json")
@@ -796,9 +723,12 @@ def vehicles_import_json(request):
             count = 0
 
             for item in data:
-                # Prevent KeyError and skip invalid objects
                 if not isinstance(item, dict):
                     continue
+
+                # 🔥 REMOVE ID ALWAYS — IMPORTER WILL BREAK WITHOUT THIS
+                if "id" in item:
+                    del item["id"]
 
                 Vehicle.objects.create(
                     vehicle_type=item.get("vehicle_type"),
@@ -823,32 +753,32 @@ def vehicles_import_json(request):
 
 
 
+
 @login_required
 @role_required(["admin", "manager"])
 def warehouses_export_json(request):
-    warehouses = Warehouse.objects.all().values()
+    warehouses = list(
+        Warehouse.objects.all().values(
+            "id",
+            "name",
+            "address",
+            "contact",
+            "po_schedule_open",
+            "po_schedule_close",
+            "maximum_storage_capacity",
+        )
+    )
 
-    cleaned_warehouses = []
-    time_fields = [
-        "po_schedule_open",
-        "po_schedule_close",
-        "deliver_schedule_open",
-        "deliver_schedule_close",
-    ]
-
+    cleaned = []
     for w in warehouses:
         w = dict(w)
+        for field in ("po_schedule_open", "po_schedule_close"):
+            val = w.get(field)
+            if isinstance(val, time):
+                w[field] = val.strftime("%H:%M:%S")
+        cleaned.append(w)
 
-        # Convertir los campos time en strings
-        for key in time_fields:
-            value = w.get(key)
-            if value is not None:
-                w[key] = value.strftime("%H:%M:%S")
-
-        cleaned_warehouses.append(w)
-
-    json_data = json.dumps(cleaned_warehouses, indent=4)
-
+    json_data = json.dumps(cleaned, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="warehouses_export.json"'
     return response
@@ -859,13 +789,11 @@ def warehouses_export_json(request):
 def warehouses_import_json(request):
     if request.method == "POST":
         form = WarehouseImportForm(request.POST, request.FILES)
-
         if form.is_valid():
             file = request.FILES["file"]
-
             try:
                 data = json.load(file)
-            except:
+            except Exception:
                 messages.error(request, "Invalid JSON file.")
                 return redirect("warehouses_import_json")
 
@@ -880,14 +808,17 @@ def warehouses_import_json(request):
 
                 Warehouse.objects.create(
                     name=item.get("name", ""),
-                    location=item.get("location", ""),
-                    capacity=item.get("capacity", 0)
+                    address=item.get("address") or item.get("location", ""),
+                    contact=item.get("contact", ""),
+                    po_schedule_open=item.get("po_schedule_open") or "09:00:00",
+                    po_schedule_close=item.get("po_schedule_close") or "18:00:00",
+                    maximum_storage_capacity=item.get("maximum_storage_capacity")
+                    or item.get("capacity", 0),
                 )
                 count += 1
 
             messages.success(request, f"Imported {count} warehouses successfully.")
             return redirect("warehouses_list")
-
     else:
         form = WarehouseImportForm()
 
@@ -899,7 +830,6 @@ def warehouses_import_json(request):
 def deliveries_export_json(request):
     deliveries = Delivery.objects.all().values()
 
-    # Convertir cualquier campo no serializable (fecha) a string
     cleaned = []
     for d in deliveries:
         row = {}
@@ -911,7 +841,6 @@ def deliveries_export_json(request):
         cleaned.append(row)
 
     json_data = json.dumps(cleaned, indent=4)
-
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = "attachment; filename=deliveries.json"
     return response
@@ -922,15 +851,15 @@ def deliveries_export_json(request):
 def deliveries_import_json(request):
     if request.method == "POST":
         form = DeliveryImportForm(request.POST, request.FILES)
-
         if form.is_valid():
             file = request.FILES["file"]
             data = json.load(file)
 
             count = 0
             for item in data:
+                if not isinstance(item, dict):
+                    continue
 
-                # ⚠️ Eliminar ID si viene en el JSON
                 item.pop("id", None)
 
                 Delivery.objects.create(
@@ -952,20 +881,14 @@ def deliveries_import_json(request):
                     destination=item.get("destination", ""),
                     delivery_date=item.get("delivery_date", None),
                 )
-
                 count += 1
 
             messages.success(request, f"Imported {count} deliveries successfully.")
             return redirect("deliveries_list")
-
     else:
         form = DeliveryImportForm()
 
     return render(request, "deliveries/import.html", {"form": form})
-
-
-
-
 
 
 @login_required
@@ -973,7 +896,6 @@ def deliveries_import_json(request):
 def routes_import_json(request):
     if request.method == "POST":
         file = request.FILES.get("file")
-
         if not file:
             messages.error(request, "You must upload a JSON file.")
             return redirect("routes_import_json")
@@ -982,94 +904,71 @@ def routes_import_json(request):
         count = 0
 
         for item in data:
+            if not isinstance(item, dict):
+                continue
             Route.objects.create(
                 description=item.get("description", ""),
                 delivery_status=item.get("delivery_status", ""),
-
                 vehicle_id=item.get("vehicle_id"),
                 driver_id=item.get("driver_id"),
-
                 origin_name=item.get("origin_name", ""),
                 origin_address=item.get("origin_address", ""),
                 origin_contact=item.get("origin_contact", ""),
-
                 destination_name=item.get("destination_name", ""),
                 destination_address=item.get("destination_address", ""),
                 destination_contact=item.get("destination_contact", ""),
-
                 delivery_date=item.get("delivery_date"),
                 delivery_start_time=item.get("delivery_start_time"),
                 delivery_end_time=item.get("delivery_end_time"),
-
                 kms_travelled=item.get("kms_travelled", 0),
                 expected_duration=item.get("expected_duration"),
-                driver_notes=item.get("driver_notes", "")
+                driver_notes=item.get("driver_notes", ""),
             )
             count += 1
 
         messages.success(request, f"Imported {count} routes successfully.")
         return redirect("routes_list")
+    else:
+        form = RouteImportForm()
 
-    return render(request, "routes/import.html")
-
-
-# --- IMPORTS NECESARIOS ---
-from datetime import date, time, timedelta
-import json
-
-from django.http import HttpResponse
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-
-from .models import Route
+    return render(request, "routes/import.html", {"form": form})
 
 
 @login_required
 @role_required(["admin", "manager"])
 def routes_export_json(request):
+    routes = list(
+        Route.objects.all().values(
+            "id",
+            "description",
+            "delivery_status",
+            "vehicle_id",
+            "driver_id",
+            "origin_name",
+            "origin_address",
+            "origin_contact",
+            "destination_name",
+            "destination_address",
+            "destination_contact",
+            "delivery_date",
+            "delivery_start_time",
+            "delivery_end_time",
+            "kms_travelled",
+            "expected_duration",
+            "driver_notes",
+        )
+    )
 
-    routes = list(Route.objects.all().values(
-        "id",
-        "description",
-        "delivery_status",
-
-        "vehicle_id",
-        "driver_id",
-
-        "origin_name",
-        "origin_address",
-        "origin_contact",
-
-        "destination_name",
-        "destination_address",
-        "destination_contact",
-
-        "delivery_date",
-        "delivery_start_time",
-        "delivery_end_time",
-
-        "kms_travelled",
-        "expected_duration",
-
-        "driver_notes",
-    ))
-
-    # Convert Python objects into JSON-safe strings
     for r in routes:
-
-        # Date → YYYY-MM-DD
         if isinstance(r["delivery_date"], date):
             r["delivery_date"] = r["delivery_date"].strftime("%Y-%m-%d")
 
-        # Time → HH:MM:SS
         if isinstance(r["delivery_start_time"], time):
             r["delivery_start_time"] = r["delivery_start_time"].strftime("%H:%M:%S")
 
         if isinstance(r["delivery_end_time"], time):
             r["delivery_end_time"] = r["delivery_end_time"].strftime("%H:%M:%S")
 
-        # Timedelta → HH:MM:SS
         if isinstance(r["expected_duration"], timedelta):
             total_seconds = int(r["expected_duration"].total_seconds())
             hours = total_seconds // 3600
@@ -1077,73 +976,55 @@ def routes_export_json(request):
             seconds = total_seconds % 60
             r["expected_duration"] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-    # Generate JSON
     json_data = json.dumps(routes, indent=4)
-
-    # File response
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="routes_export.json"'
     return response
 
-import json
-from datetime import datetime
-
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
-
-from .models import Invoice
-
-
-from datetime import datetime
-import json
-from decimal import Decimal
 
 @login_required
 @role_required(["admin", "manager"])
 def invoices_export_json(request):
-
-    invoices = list(Invoice.objects.all().values(
-        "id_invoice",
-        "invoice_datetime",
-        "invoice_status",
-        "invoice_type",
-        "cost",
-        "payment_method",
-        "address",
-        "contact",
-        "quantity",
-        "name",
-        "paid",
-        "user_id",
-    ))
+    invoices = list(
+        Invoice.objects.all().values(
+            "id_invoice",
+            "invoice_datetime",
+            "invoice_status",
+            "invoice_type",
+            "cost",
+            "payment_method",
+            "address",
+            "contact",
+            "quantity",
+            "name",
+            "paid",
+            "user_id",
+        )
+    )
 
     for inv in invoices:
-
-        # Convert datetime → string
         dt = inv.get("invoice_datetime")
         if isinstance(dt, datetime):
             inv["invoice_datetime"] = dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Convert Decimal → float
         cost = inv.get("cost")
         if isinstance(cost, Decimal):
             inv["cost"] = float(cost)
 
-        # Convert any Decimal fields in the future
         qty = inv.get("quantity")
         if isinstance(qty, Decimal):
             inv["quantity"] = float(qty)
 
     json_data = json.dumps(invoices, indent=4)
-
     response = HttpResponse(json_data, content_type="application/json")
-    response["Content-Disposition"] = 'attachment; filename=\"invoices_export.json\"'
+    response["Content-Disposition"] = 'attachment; filename="invoices_export.json"'
     return response
 
 
+# ==========================================================
+#  CSV EXPORTS (PostgreSQL functions)
+# ==========================================================
 
-from django.db import connection
-from django.http import HttpResponse
 @login_required
 @role_required(["admin", "manager"])
 def vehicles_export_csv(request):
@@ -1151,12 +1032,14 @@ def vehicles_export_csv(request):
         cursor.execute("SELECT * FROM export_vehicles_csv();")
         rows = cursor.fetchall()
 
-    header = "id_vehicle,plate,brand,model,capacity,available\n"
+    header = "id,plate_number,model,brand,vehicle_status,year,fuel_type,capacity,last_maintenance_date\n"
     csv_data = header + "\n".join(r[0] for r in rows)
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="vehicles_export.csv"'
     return response
+
+
 @login_required
 @role_required(["admin", "manager"])
 def warehouses_export_csv(request):
@@ -1164,12 +1047,14 @@ def warehouses_export_csv(request):
         cursor.execute("SELECT * FROM export_warehouses_csv();")
         rows = cursor.fetchall()
 
-    header = "id_warehouse,name,address,contact,capacity\n"
+    header = "id,name,address,contact,po_schedule_open,po_schedule_close,maximum_storage_capacity\n"
     csv_data = header + "\n".join(r[0] for r in rows)
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="warehouses_export.csv"'
     return response
+
+
 @login_required
 @role_required(["admin", "manager"])
 def deliveries_export_csv(request):
@@ -1178,38 +1063,42 @@ def deliveries_export_csv(request):
         rows = cursor.fetchall()
 
     header = (
-        "id_delivery,tracking_number,status,weight,type,fragile,"
-        "sender_name,sender_address,sender_contact,"
-        "receiver_name,receiver_address,receiver_contact,"
-        "route_id,warehouse_id\n"
+        "id,tracking_number,description,"
+        "sender_name,sender_address,sender_phone,sender_email,"
+        "recipient_name,recipient_address,recipient_phone,recipient_email,"
+        "item_type,weight,dimensions,status,priority,"
+        "registered_at,updated_at,in_transition,destination,delivery_date,"
+        "driver_id,invoice_id,route_id,client_id\n"
     )
-
     csv_data = header + "\n".join(r[0] for r in rows)
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="deliveries_export.csv"'
     return response
+
+
 @login_required
 @role_required(["admin", "manager"])
-def routes_export_csv_pg(request):
+def routes_export_csv(request):
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM export_routes_csv();")
         rows = cursor.fetchall()
 
     header = (
-        "id_route,description,delivery_status,"
+        "id,description,delivery_status,"
         "vehicle_id,driver_id,"
         "origin_name,origin_address,origin_contact,"
         "destination_name,destination_address,destination_contact,"
         "delivery_date,delivery_start_time,delivery_end_time,"
         "kms_travelled,expected_duration,driver_notes\n"
     )
-
     csv_data = header + "\n".join(r[0] for r in rows)
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="routes_export.csv"'
     return response
+
+
 @login_required
 @role_required(["admin", "manager"])
 def invoices_export_csv(request):
@@ -1218,28 +1107,12 @@ def invoices_export_csv(request):
         rows = cursor.fetchall()
 
     header = (
-        "id_invoice,invoice_datetime,invoice_status,invoice_type,"
-        "name,address,contact,cost,quantity,paid,payment_method,user_id\n"
+        "id_invoice,invoice_status,invoice_type,quantity,"
+        "invoice_datetime,cost,paid,payment_method,"
+        "name,address,contact,user_id\n"
     )
-
     csv_data = header + "\n".join(r[0] for r in rows)
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="invoices_export.csv"'
-    return response
-
-
-
-
-
-def invoices_export_csv(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM export_invoices_csv();")
-        rows = cursor.fetchall()
-
-    content = "id_invoice,invoice_status,invoice_type,quantity,invoice_datetime,cost,paid,payment_method,name,address,contact,user_id\n"
-    content += "\n".join(row[0] for row in rows)
-
-    response = HttpResponse(content, content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="invoices.csv"'
     return response

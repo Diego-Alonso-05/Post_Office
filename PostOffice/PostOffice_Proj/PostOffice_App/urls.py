@@ -66,7 +66,7 @@ urlpatterns = [
     path("vehicles/export/csv/", views.vehicles_export_csv, name="vehicles_export_csv"),
     path("warehouses/export/csv/", views.warehouses_export_csv, name="warehouses_export_csv"),
     path("deliveries/export/csv/", views.deliveries_export_csv, name="deliveries_export_csv"),
-    path("routes/export/csv/", views.routes_export_csv_pg, name="routes_export_csv"),
+    path("routes/export/csv/", views.routes_export_csv, name="routes_export_csv"),
     path("invoices/export/csv/", views.invoices_export_csv, name="invoices_export_csv"),
 
 ]
