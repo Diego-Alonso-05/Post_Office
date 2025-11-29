@@ -7,7 +7,9 @@ Open PgAdmin > Select server 'PostGreSQL 17' > In Databases, create new DB calle
 
 cd PostOffice\PostOffice_Proj > run the commands:
     pip install django psycopg2-binary pymongo
+
     py manage.py makemigrations
+
     py manage.py migrate
 
 Run DML script(PostOffice\populate_data.sql) inside PgAdmin query tool to load data directly to the app
