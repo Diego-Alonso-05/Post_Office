@@ -11,6 +11,7 @@ from django.http import (
     HttpResponseBadRequest,
 )
 from django.shortcuts import render, redirect, get_object_or_404
+from datetime import time
 
 from pymongo import MongoClient  # kept ONLY for notifications
 
@@ -34,7 +35,12 @@ from .forms import (
     InvoiceForm,
     RouteForm,
     DeliveryForm,
+    VehicleImportForm,  
+    WarehouseImportForm,
+    DeliveryImportForm,
+    RouteImportForm, 
 )
+
 
 # ==========================================================
 #  MONGO: NOTIFICATIONS ONLY
@@ -731,3 +737,405 @@ def mail_list(request):
 
 def mail_detail(request, mail_id):
     return render(request, "mail/detail.html", {"mail_id": mail_id})
+
+
+
+
+# ==========================================================
+#  VEHICLES EXPORT (DOWNLOAD JSON FILE)
+# ==========================================================
+
+import json
+from django.http import HttpResponse
+from django.db import connection
+
+@login_required
+@role_required(["admin", "manager", "staff"])
+def vehicles_export_json(request):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT exportar_vehicles();")
+        data = cursor.fetchone()[0]
+
+    # Convertir en JSON bonito (indentado)
+    json_data = json.dumps(data, indent=4)
+
+    # Preparar archivo descargable
+    response = HttpResponse(json_data, content_type='application/json')
+    response['Content-Disposition'] = 'attachment; filename="vehicles_export.json"'
+
+    return response
+
+
+# ==========================================================
+#  VEHICLES IMPORT (UPLOAD JSON FILE)
+# ==========================================================
+
+import json
+from django.contrib import messages
+
+@login_required
+@role_required(["admin", "manager"])
+def vehicles_import_json(request):
+    if request.method == "POST":
+        form = VehicleImportForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            file = request.FILES["file"]
+
+            try:
+                data = json.load(file)
+            except Exception:
+                messages.error(request, "Invalid JSON file.")
+                return redirect("vehicles_import_json")
+
+            # Validate JSON is a list
+            if not isinstance(data, list):
+                messages.error(request, "JSON must contain a list of vehicles.")
+                return redirect("vehicles_import_json")
+
+            count = 0
+
+            for item in data:
+                # Prevent KeyError and skip invalid objects
+                if not isinstance(item, dict):
+                    continue
+
+                Vehicle.objects.create(
+                    vehicle_type=item.get("vehicle_type"),
+                    plate_number=item.get("plate_number"),
+                    capacity=item.get("capacity"),
+                    brand=item.get("brand"),
+                    model=item.get("model"),
+                    vehicle_status=item.get("vehicle_status"),
+                    year=item.get("year"),
+                    fuel_type=item.get("fuel_type"),
+                    last_maintenance_date=item.get("last_maintenance_date"),
+                )
+                count += 1
+
+            messages.success(request, f"Imported {count} vehicles successfully.")
+            return redirect("vehicles_list")
+
+    else:
+        form = VehicleImportForm()
+
+    return render(request, "vehicles/import.html", {"form": form})
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_export_json(request):
+    warehouses = Warehouse.objects.all().values()
+
+    cleaned_warehouses = []
+    time_fields = [
+        "po_schedule_open",
+        "po_schedule_close",
+        "deliver_schedule_open",
+        "deliver_schedule_close",
+    ]
+
+    for w in warehouses:
+        w = dict(w)
+
+        # Convertir los campos time en strings
+        for key in time_fields:
+            value = w.get(key)
+            if value is not None:
+                w[key] = value.strftime("%H:%M:%S")
+
+        cleaned_warehouses.append(w)
+
+    json_data = json.dumps(cleaned_warehouses, indent=4)
+
+    response = HttpResponse(json_data, content_type="application/json")
+    response["Content-Disposition"] = 'attachment; filename="warehouses_export.json"'
+    return response
+
+
+@login_required
+@role_required(["admin"])
+def warehouses_import_json(request):
+    if request.method == "POST":
+        form = WarehouseImportForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            file = request.FILES["file"]
+
+            try:
+                data = json.load(file)
+            except:
+                messages.error(request, "Invalid JSON file.")
+                return redirect("warehouses_import_json")
+
+            if not isinstance(data, list):
+                messages.error(request, "JSON must contain a list of warehouses.")
+                return redirect("warehouses_import_json")
+
+            count = 0
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+
+                Warehouse.objects.create(
+                    name=item.get("name", ""),
+                    location=item.get("location", ""),
+                    capacity=item.get("capacity", 0)
+                )
+                count += 1
+
+            messages.success(request, f"Imported {count} warehouses successfully.")
+            return redirect("warehouses_list")
+
+    else:
+        form = WarehouseImportForm()
+
+    return render(request, "warehouses/import.html", {"form": form})
+
+
+@login_required
+@role_required(["admin", "manager"])
+def deliveries_export_json(request):
+    deliveries = Delivery.objects.all().values()
+
+    # Convertir cualquier campo no serializable (fecha) a string
+    cleaned = []
+    for d in deliveries:
+        row = {}
+        for key, value in d.items():
+            if hasattr(value, "isoformat"):
+                row[key] = value.isoformat()
+            else:
+                row[key] = value
+        cleaned.append(row)
+
+    json_data = json.dumps(cleaned, indent=4)
+
+    response = HttpResponse(json_data, content_type="application/json")
+    response["Content-Disposition"] = "attachment; filename=deliveries.json"
+    return response
+
+
+@login_required
+@role_required(["admin", "manager"])
+def deliveries_import_json(request):
+    if request.method == "POST":
+        form = DeliveryImportForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            file = request.FILES["file"]
+            data = json.load(file)
+
+            count = 0
+            for item in data:
+
+                # ⚠️ Eliminar ID si viene en el JSON
+                item.pop("id", None)
+
+                Delivery.objects.create(
+                    tracking_number=item.get("tracking_number", ""),
+                    description=item.get("description", ""),
+                    sender_name=item.get("sender_name", ""),
+                    sender_address=item.get("sender_address", ""),
+                    sender_phone=item.get("sender_phone", ""),
+                    sender_email=item.get("sender_email", ""),
+                    recipient_name=item.get("recipient_name", ""),
+                    recipient_address=item.get("recipient_address", ""),
+                    recipient_phone=item.get("recipient_phone", ""),
+                    recipient_email=item.get("recipient_email", ""),
+                    item_type=item.get("item_type", ""),
+                    weight=item.get("weight", 0),
+                    dimensions=item.get("dimensions", ""),
+                    status=item.get("status", ""),
+                    priority=item.get("priority", ""),
+                    destination=item.get("destination", ""),
+                    delivery_date=item.get("delivery_date", None),
+                )
+
+                count += 1
+
+            messages.success(request, f"Imported {count} deliveries successfully.")
+            return redirect("deliveries_list")
+
+    else:
+        form = DeliveryImportForm()
+
+    return render(request, "deliveries/import.html", {"form": form})
+
+
+
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def routes_import_json(request):
+    if request.method == "POST":
+        file = request.FILES.get("file")
+
+        if not file:
+            messages.error(request, "You must upload a JSON file.")
+            return redirect("routes_import_json")
+
+        data = json.load(file)
+        count = 0
+
+        for item in data:
+            Route.objects.create(
+                description=item.get("description", ""),
+                delivery_status=item.get("delivery_status", ""),
+
+                vehicle_id=item.get("vehicle_id"),
+                driver_id=item.get("driver_id"),
+
+                origin_name=item.get("origin_name", ""),
+                origin_address=item.get("origin_address", ""),
+                origin_contact=item.get("origin_contact", ""),
+
+                destination_name=item.get("destination_name", ""),
+                destination_address=item.get("destination_address", ""),
+                destination_contact=item.get("destination_contact", ""),
+
+                delivery_date=item.get("delivery_date"),
+                delivery_start_time=item.get("delivery_start_time"),
+                delivery_end_time=item.get("delivery_end_time"),
+
+                kms_travelled=item.get("kms_travelled", 0),
+                expected_duration=item.get("expected_duration"),
+                driver_notes=item.get("driver_notes", "")
+            )
+            count += 1
+
+        messages.success(request, f"Imported {count} routes successfully.")
+        return redirect("routes_list")
+
+    return render(request, "routes/import.html")
+
+
+# --- IMPORTS NECESARIOS ---
+from datetime import date, time, timedelta
+import json
+
+from django.http import HttpResponse
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+
+from .models import Route
+
+
+@login_required
+@role_required(["admin", "manager"])
+def routes_export_json(request):
+
+    routes = list(Route.objects.all().values(
+        "id",
+        "description",
+        "delivery_status",
+
+        "vehicle_id",
+        "driver_id",
+
+        "origin_name",
+        "origin_address",
+        "origin_contact",
+
+        "destination_name",
+        "destination_address",
+        "destination_contact",
+
+        "delivery_date",
+        "delivery_start_time",
+        "delivery_end_time",
+
+        "kms_travelled",
+        "expected_duration",
+
+        "driver_notes",
+    ))
+
+    # Convert Python objects into JSON-safe strings
+    for r in routes:
+
+        # Date → YYYY-MM-DD
+        if isinstance(r["delivery_date"], date):
+            r["delivery_date"] = r["delivery_date"].strftime("%Y-%m-%d")
+
+        # Time → HH:MM:SS
+        if isinstance(r["delivery_start_time"], time):
+            r["delivery_start_time"] = r["delivery_start_time"].strftime("%H:%M:%S")
+
+        if isinstance(r["delivery_end_time"], time):
+            r["delivery_end_time"] = r["delivery_end_time"].strftime("%H:%M:%S")
+
+        # Timedelta → HH:MM:SS
+        if isinstance(r["expected_duration"], timedelta):
+            total_seconds = int(r["expected_duration"].total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            r["expected_duration"] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    # Generate JSON
+    json_data = json.dumps(routes, indent=4)
+
+    # File response
+    response = HttpResponse(json_data, content_type="application/json")
+    response["Content-Disposition"] = 'attachment; filename="routes_export.json"'
+    return response
+
+import json
+from datetime import datetime
+
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+
+from .models import Invoice
+
+
+from datetime import datetime
+import json
+from decimal import Decimal
+
+@login_required
+@role_required(["admin", "manager"])
+def invoices_export_json(request):
+
+    invoices = list(Invoice.objects.all().values(
+        "id_invoice",
+        "invoice_datetime",
+        "invoice_status",
+        "invoice_type",
+        "cost",
+        "payment_method",
+        "address",
+        "contact",
+        "quantity",
+        "name",
+        "paid",
+        "user_id",
+    ))
+
+    for inv in invoices:
+
+        # Convert datetime → string
+        dt = inv.get("invoice_datetime")
+        if isinstance(dt, datetime):
+            inv["invoice_datetime"] = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Convert Decimal → float
+        cost = inv.get("cost")
+        if isinstance(cost, Decimal):
+            inv["cost"] = float(cost)
+
+        # Convert any Decimal fields in the future
+        qty = inv.get("quantity")
+        if isinstance(qty, Decimal):
+            inv["quantity"] = float(qty)
+
+    json_data = json.dumps(invoices, indent=4)
+
+    response = HttpResponse(json_data, content_type="application/json")
+    response["Content-Disposition"] = 'attachment; filename=\"invoices_export.json\"'
+    return response

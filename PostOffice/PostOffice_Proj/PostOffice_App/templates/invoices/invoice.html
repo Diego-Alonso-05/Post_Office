@@ -1,6 +1,14 @@
 {% extends 'base.html' %}
 {% block title %}Invoices — Mailly{% endblock %}
 {% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+    <h3>Invoices</h3>
+
+    <a class="btn btn-primary" href="{% url 'invoices_export_json' %}">
+        Export JSON
+    </a>
+</div>
+
 <div class="card">
   <h3>Invoices</h3>
   <table class="table" style="margin-top:12px">

@@ -4,15 +4,26 @@
 <div class="card">
 
   <!-- Header -->
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <h3 style="margin:0;">Vehicles</h3>
-    {# Django templates do not support list literals in ``in`` expressions. Use explicit comparisons. #}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  <h3 style="margin:0;">Vehicles</h3>
+
+  <div style="display:flex; gap:8px;">
     {% if request.user.role == 'admin' or request.user.role == 'manager' %}
       <a class="btn btn-primary" href="{% url 'vehicles_create' %}">
         <i class="fa fa-plus"></i> Add Vehicle
       </a>
     {% endif %}
+
+    <a class="btn btn-secondary" href="{% url 'vehicles_export_json' %}">
+      <i class="fa fa-download"></i> Export JSON
+    </a>
+    <a class="btn btn-secondary" href="{% url 'vehicles_import_json' %}">
+    <i class="fa fa-upload"></i> Import JSON
+</a>
+
   </div>
+</div>
+
 
   <!-- Table -->
   <table class="table" style="margin-top:16px;">

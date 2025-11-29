@@ -85,7 +85,7 @@ DATABASES = {
         # Database user account
         "USER": "postgres",
         # Database user password
-        "PASSWORD": "postgres",
+        "PASSWORD": "Al1711",
         # Host where PostgreSQL is running
         "HOST": "localhost",
         # Port for PostgreSQL (default is 5432)

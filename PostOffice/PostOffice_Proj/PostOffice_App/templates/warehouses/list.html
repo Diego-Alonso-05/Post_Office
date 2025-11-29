@@ -8,6 +8,9 @@
       <a class="btn btn-primary" href="{% url 'warehouses_create' %}">
         <i class="fa fa-plus"></i> Add Warehouse
       </a>
+      <a href="{% url 'warehouses_export_json' %}" class="btn btn-secondary">Export JSON</a>
+      <a href="{% url 'warehouses_import_json' %}" class="btn btn-secondary">Import JSON</a>
+
     {% endif %}
   </div>
   <table class="table" style="margin-top:16px;">

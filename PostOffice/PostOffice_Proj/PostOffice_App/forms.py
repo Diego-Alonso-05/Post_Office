@@ -252,3 +252,18 @@ class DeliveryForm(forms.ModelForm):
         if registered and updated and updated <= registered:
             self.add_error("updated_at", "Updated time must be after registered time.")
         return cleaned_data
+
+
+class VehicleImportForm(forms.Form):
+    file = forms.FileField(label="Select JSON file")
+
+
+class WarehouseImportForm(forms.Form):
+    file = forms.FileField()
+
+
+class DeliveryImportForm(forms.Form):
+    file = forms.FileField()
+
+class RouteImportForm(forms.Form):
+    file = forms.FileField()

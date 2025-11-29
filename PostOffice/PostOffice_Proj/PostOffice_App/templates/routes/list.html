@@ -5,8 +5,23 @@
 
 <div style="display:flex; justify-content:space-between; align-items:center;">
   <h3>Routes</h3>
+
   {% if request.user.role == 'admin' %}
-    <a class="btn btn-primary" href="{% url 'routes_create' %}">+ Create Route</a>
+    <div>
+
+      <a class="btn btn-primary" href="{% url 'routes_create' %}">
+        + Create Route
+      </a>
+
+      <a class="btn btn-primary" href="{% url 'routes_export_json' %}">
+        <i class="fa fa-download"></i> Export JSON
+      </a>
+
+      <a class="btn btn-primary" href="{% url 'routes_import_json' %}">
+        <i class="fa fa-upload"></i> Import JSON
+      </a>
+
+    </div>
   {% endif %}
 </div>
 
