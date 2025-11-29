@@ -22,6 +22,8 @@ from pymongo import MongoClient  # kept ONLY for notifications
 from .models import (
     User,
     Employee,
+    EmployeeDriver,
+    EmployeeStaff,
     Warehouse,
     Vehicle,
     Invoice,
@@ -898,44 +900,63 @@ def deliveries_export_json(request):
 def deliveries_import_json(request):
     if request.method == "POST":
         form = DeliveryImportForm(request.POST, request.FILES)
+
         if form.is_valid():
             file = request.FILES["file"]
             data = json.load(file)
 
             count = 0
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
 
-                item.pop("id", None)
+            for item in data:
+
+                # Debug print – REMOVE AFTER TESTING
+                print("IMPORT ITEM BEFORE CLEAN:", item)
+
+                # Remove ANY key that looks like an id
+                for key in list(item.keys()):
+                    if key.lower() == "id":
+                        item.pop(key)
+
+                # Debug print – REMOVE AFTER TESTING
+                print("IMPORT ITEM AFTER CLEAN:", item)
 
                 Delivery.objects.create(
-                    tracking_number=item.get("tracking_number", ""),
-                    description=item.get("description", ""),
-                    sender_name=item.get("sender_name", ""),
-                    sender_address=item.get("sender_address", ""),
-                    sender_phone=item.get("sender_phone", ""),
-                    sender_email=item.get("sender_email", ""),
-                    recipient_name=item.get("recipient_name", ""),
-                    recipient_address=item.get("recipient_address", ""),
-                    recipient_phone=item.get("recipient_phone", ""),
-                    recipient_email=item.get("recipient_email", ""),
-                    item_type=item.get("item_type", ""),
-                    weight=item.get("weight", 0),
-                    dimensions=item.get("dimensions", ""),
-                    status=item.get("status", ""),
-                    priority=item.get("priority", ""),
-                    destination=item.get("destination", ""),
-                    delivery_date=item.get("delivery_date", None),
+                    tracking_number=item.get("tracking_number"),
+                    description=item.get("description"),
+                    sender_name=item.get("sender_name"),
+                    sender_address=item.get("sender_address"),
+                    sender_phone=item.get("sender_phone"),
+                    sender_email=item.get("sender_email"),
+                    recipient_name=item.get("recipient_name"),
+                    recipient_address=item.get("recipient_address"),
+                    recipient_phone=item.get("recipient_phone"),
+                    recipient_email=item.get("recipient_email"),
+                    item_type=item.get("item_type"),
+                    weight=item.get("weight"),
+                    dimensions=item.get("dimensions"),
+                    status=item.get("status"),
+                    priority=item.get("priority"),
+                    destination=item.get("destination"),
+                    delivery_date=item.get("delivery_date"),
+
+                    # Foreign keys
+                    driver_id=item.get("driver_id"),
+                    client_id=item.get("client_id"),
+                    route_id=item.get("route_id"),
+                    invoice_id=item.get("invoice_id"),
                 )
+
                 count += 1
 
             messages.success(request, f"Imported {count} deliveries successfully.")
             return redirect("deliveries_list")
+
     else:
         form = DeliveryImportForm()
 
     return render(request, "deliveries/import.html", {"form": form})
+
+
 
 
 @login_required
@@ -943,42 +964,61 @@ def deliveries_import_json(request):
 def routes_import_json(request):
     if request.method == "POST":
         file = request.FILES.get("file")
+
         if not file:
             messages.error(request, "You must upload a JSON file.")
             return redirect("routes_import_json")
 
-        data = json.load(file)
+        try:
+            data = json.load(file)
+        except Exception:
+            messages.error(request, "Invalid JSON file.")
+            return redirect("routes_import_json")
+
+        if not isinstance(data, list):
+            messages.error(request, "JSON must contain a list of routes.")
+            return redirect("routes_import_json")
+
         count = 0
 
         for item in data:
-            if not isinstance(item, dict):
-                continue
+
+            # Always remove id to avoid IntegrityError
+            if "id" in item:
+                del item["id"]
+
+            # Create the route safely
             Route.objects.create(
                 description=item.get("description", ""),
                 delivery_status=item.get("delivery_status", ""),
+
                 vehicle_id=item.get("vehicle_id"),
                 driver_id=item.get("driver_id"),
+
                 origin_name=item.get("origin_name", ""),
                 origin_address=item.get("origin_address", ""),
                 origin_contact=item.get("origin_contact", ""),
+
                 destination_name=item.get("destination_name", ""),
                 destination_address=item.get("destination_address", ""),
                 destination_contact=item.get("destination_contact", ""),
+
                 delivery_date=item.get("delivery_date"),
                 delivery_start_time=item.get("delivery_start_time"),
                 delivery_end_time=item.get("delivery_end_time"),
+
                 kms_travelled=item.get("kms_travelled", 0),
                 expected_duration=item.get("expected_duration"),
-                driver_notes=item.get("driver_notes", ""),
+
+                driver_notes=item.get("driver_notes", "")
             )
+
             count += 1
 
         messages.success(request, f"Imported {count} routes successfully.")
         return redirect("routes_list")
-    else:
-        form = RouteImportForm()
 
-    return render(request, "routes/import.html", {"form": form})
+    return render(request, "routes/import.html")
 
 
 @login_required
