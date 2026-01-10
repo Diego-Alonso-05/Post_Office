@@ -2,23 +2,19 @@
 {% block title %}Warehouses — Mailly{% endblock %}
 {% block content %}
 <div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <h3 style="margin:0;">Warehouses</h3>
-    {% if request.user.role == 'admin' %}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  <h3 style="margin:0;">Warehouses</h3>
+  {% if request.user.role == 'admin' %}
+    <div style="display:flex; gap:8px;">
       <a class="btn btn-primary" href="{% url 'warehouses_create' %}">
         <i class="fa fa-plus"></i> Add Warehouse
       </a>
-
       <a href="{% url 'warehouses_export_json' %}" class="btn btn-secondary">Export JSON</a>
       <a href="{% url 'warehouses_import_json' %}" class="btn btn-secondary">Import JSON</a>
-
-      <!-- Botón añadido para Export CSV -->
-      <a href="{% url 'warehouses_export_csv' %}" class="btn btn-info">
-        Export CSV
-      </a>
-
-    {% endif %}
-  </div>
+      <a href="{% url 'warehouses_export_csv' %}" class="btn btn-info">Export CSV</a>
+    </div>
+  {% endif %}
+</div>
 
   <table class="table" style="margin-top:16px;">
     <thead>
