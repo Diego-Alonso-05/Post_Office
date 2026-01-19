@@ -15,9 +15,6 @@ from django.http import (
     HttpResponseBadRequest,
 )
 from django.shortcuts import render, redirect, get_object_or_404
-from django.db import connection
-
-from pymongo import MongoClient  # kept ONLY for notifications
 
 from .models import (
     User,
@@ -30,6 +27,7 @@ from .models import (
     Route,
     Delivery,
 )
+
 from .forms import (
     CustomUserCreationForm,
     CustomUserChangeForm,
@@ -49,36 +47,8 @@ from .forms import (
 
 
 # ==========================================================
-#  MONGO: NOTIFICATIONS ONLY
-# ==========================================================
-
-mongo_client = MongoClient("mongodb://localhost:27017")
-mongo_db = mongo_client["postoffice"]
-notifications_collection = mongo_db["notifications"]  # still in MongoDB
-
-
-def create_notification(notification_type, recipient_contact, subject, message, status="pending"):
-    """Insert a notification document into MongoDB."""
-    try:
-        notifications_collection.insert_one(
-            {
-                "notification_type": notification_type,
-                "recipient_contact": recipient_contact,
-                "subject": subject,
-                "message": message,
-                "status": status,
-                "created_at": timezone.now(),
-            }
-        )
-    except Exception:
-        # Avoid breaking core flow if Mongo is down
-        pass
-
-
-# ==========================================================
 #  ROLE-BASED ACCESS DECORATOR
 # ==========================================================
-
 def role_required(allowed_roles):
     """
     Restrict access to users whose User.role is in allowed_roles.
@@ -100,7 +70,6 @@ def role_required(allowed_roles):
 # ==========================================================
 #  AUTH VIEWS (login / register / logout)
 # ==========================================================
-
 def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
@@ -137,7 +106,6 @@ def logout_view(request):
 # ==========================================================
 #  DASHBOARD
 # ==========================================================
-
 @login_required
 def dashboard(request):
     role = request.user.role
@@ -165,7 +133,6 @@ def dashboard(request):
 # ==========================================================
 #  HOME
 # ==========================================================
-
 def home(request):
     return render(request, "core/home.html")
 
@@ -173,7 +140,6 @@ def home(request):
 # ==========================================================
 #  USER & CLIENT MANAGEMENT
 # ==========================================================
-
 @login_required
 @role_required(["admin"])
 def users_list(request):
@@ -241,7 +207,6 @@ def clients_form(request, user_id=None):
 # ==========================================================
 #  EMPLOYEES
 # ==========================================================
-
 @login_required
 @role_required(["admin"])
 def employees_list(request):
@@ -343,7 +308,6 @@ def employees_form(request, employee_id=None):
 # ==========================================================
 #  INVOICES
 # ==========================================================
-
 @login_required
 @role_required(["admin", "client"])
 def invoice_list(request):
@@ -386,7 +350,6 @@ def invoice_form(request, invoice_id=None):
 # ==========================================================
 #  WAREHOUSES
 # ==========================================================
-
 @login_required
 @role_required(["admin"])
 def warehouses_list(request):
@@ -449,7 +412,6 @@ def warehouses_delete(request, warehouse_id):
 # ==========================================================
 #  VEHICLES
 # ==========================================================
-
 @login_required
 @role_required(["admin", "manager"])
 def vehicles_create(request):
@@ -511,7 +473,6 @@ def vehicles_delete(request, vehicle_id):
 # ==========================================================
 #  ROUTES
 # ==========================================================
-
 @login_required
 def routes_list(request):
     routes_qs = Route.objects.select_related("driver", "vehicle").all()
@@ -568,7 +529,6 @@ def routes_delete(request, route_id):
 # ==========================================================
 #  DELIVERIES
 # ==========================================================
-
 @login_required
 @role_required(["driver", "admin", "client", "staff", "manager"])
 def deliveries_list(request):
@@ -652,7 +612,6 @@ def deliveries_delete(request, delivery_id):
 # ==========================================================
 #  CLIENT PROFILE
 # ==========================================================
-
 @login_required
 @role_required(["client", "admin"])
 def client_profile(request):
@@ -673,7 +632,6 @@ def client_profile(request):
 # ==========================================================
 #  SIMPLE MAIL PAGES
 # ==========================================================
-
 def mail_list(request):
     return render(request, "mail/list.html")
 
@@ -685,7 +643,6 @@ def mail_detail(request, mail_id):
 # ==========================================================
 #  JSON EXPORTS (Django side) + IMPORTS
 # ==========================================================
-
 @login_required
 @role_required(["admin", "manager", "staff"])
 def vehicles_export_json(request):
@@ -958,7 +915,6 @@ def deliveries_import_json(request):
 
 
 
-
 @login_required
 @role_required(["admin", "manager"])
 def routes_import_json(request):
@@ -1111,7 +1067,6 @@ def invoices_export_json(request):
 # ==========================================================
 #  CSV EXPORTS (PostgreSQL functions)
 # ==========================================================
-
 @login_required
 @role_required(["admin", "manager"])
 def vehicles_export_csv(request):
@@ -1203,3 +1158,10 @@ def invoices_export_csv(request):
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="invoices_export.csv"'
     return response
+
+
+# ==========================================================
+#  MONGO: NOTIFICATIONS ONLY
+# ==========================================================
+
+from .notifications import create_notification

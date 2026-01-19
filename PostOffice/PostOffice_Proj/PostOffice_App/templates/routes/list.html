@@ -7,8 +7,6 @@
   <h3>Routes</h3>
 
   {% if request.user.role == 'admin' %}
-    <div>
-
       <a class="btn btn-primary" href="{% url 'routes_create' %}">
         + Create Route
       </a>
@@ -25,8 +23,6 @@
       <a class="btn btn-info" href="{% url 'routes_export_csv' %}">
         <i class="fa fa-file-csv"></i> Export CSV
       </a>
-
-    </div>
   {% endif %}
 </div>
 
