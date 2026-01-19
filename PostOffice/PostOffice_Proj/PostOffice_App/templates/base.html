@@ -94,6 +94,29 @@
               <a class="btn" href="{% url 'client_profile' %}">Profile</a>
           {% endif %}
           <!-- Links per role -->
+<!-- Notifications -->
+<button id="notifDropdown"
+        style="background:red;color:white;
+               font-size:20px;
+               border:none;
+               padding:10px;
+               border-radius:10px;">
+  🔔
+</button>
+
+<ul id="notif-menu"
+    style="display:none;
+           position:fixed;
+           top:80px;
+           right:40px;
+           background:white;
+           color:black;
+           border-radius:12px;
+           list-style:none;
+           padding:10px;
+           width:300px;
+           z-index:9999;">
+</ul>
 
           <!-- Logout -->
           <a class="btn" href="{% url 'logout' %}">Logout</a>
@@ -114,5 +137,47 @@
       <div class="muted">© {{year}} Fast Office — Quick and Reliable</div>
     </footer>
   </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+  const bell = document.getElementById("notifDropdown");
+  const menu = document.getElementById("notif-menu");
+
+  bell.onclick = function(){
+    menu.style.display = (menu.style.display === "none") ? "block" : "none";
+  };
+
+  function loadNotifications(){
+    fetch("/notifications/")
+    .then(r => r.json())
+    .then(data => {
+      menu.innerHTML = "";
+      let unread = 0;
+
+      data.notifications.forEach(n => {
+        if(!n.is_read) unread++;
+
+        menu.innerHTML += `
+          <li style="padding:8px;border-bottom:1px solid #1f2933;
+                     cursor:pointer;font-weight:${n.is_read ? 'normal':'bold'}"
+              onclick="markRead(${n.id})">
+              ${n.message}<br><small>${n.created_at}</small>
+          </li>`;
+      });
+    });
+  }
+
+  window.markRead = function(id){
+    fetch(`/notifications/read/${id}/`).then(() => loadNotifications());
+  }
+
+  loadNotifications();
+
+});
+</script>
+
+
+
 </body>
 </html>

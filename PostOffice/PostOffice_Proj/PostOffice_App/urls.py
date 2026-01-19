@@ -69,4 +69,7 @@ urlpatterns = [
     path("routes/export/csv/", views.routes_export_csv, name="routes_export_csv"),
     path("invoices/export/csv/", views.invoices_export_csv, name="invoices_export_csv"),
 
+    # Notifications
+    path("notifications/", views.get_notifications, name="get_notifications"),              # GET list of notifications
+    path("notifications/read/<str:notif_id>/", views.mark_notification_read, name="mark_notification_read"),  # Mark as read
 ]

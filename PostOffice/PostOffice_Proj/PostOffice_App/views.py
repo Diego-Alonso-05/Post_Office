@@ -13,6 +13,7 @@ from django.http import (
     HttpResponseForbidden,
     HttpResponseNotFound,
     HttpResponseBadRequest,
+    JsonResponse,
 )
 from django.shortcuts import render, redirect, get_object_or_404
 
@@ -45,6 +46,7 @@ from .forms import (
     RouteImportForm,
 )
 
+from .notifications import create_notification
 
 # ==========================================================
 #  ROLE-BASED ACCESS DECORATOR
@@ -101,6 +103,49 @@ def logout_view(request):
     auth_logout(request)
     request.session.flush()
     return redirect("login")
+
+# ========================= =================================
+#  NOTIFICATIONS - USES MONGODB ONLY
+# ==========================================================
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+# Import notification helper functions from notifications.py
+from .notifications import get_user_notifications, mark_as_read
+
+@login_required
+def get_notifications(request):
+    """
+    API endpoint to retrieve ALL notifications for the currently logged-in user.
+    Only returns notifications from the last 2 minutes.
+
+    Returns:
+        JsonResponse: JSON object containing array of user's recent notifications
+    """
+    # Get the email of the currently logged-in user
+    user_email = request.user.email
+
+    # Fetch ALL notifications from the last 2 minutes
+    data = get_user_notifications(user_email)
+
+    # Return notifications as JSON response
+    return JsonResponse({"notifications": data})
+
+@login_required
+def mark_notification_read(request, notif_id):
+    """
+    API endpoint to mark a specific notification as read.
+    Args:
+        notif_id (str): MongoDB ObjectId as a string from URL parameter
+    Returns:
+        JsonResponse: JSON object with status "ok" or "error"
+    """
+    # Attempt to mark the notification as read using helper function
+    success = mark_as_read(notif_id)
+    # Return success or error status
+    if success:
+        return JsonResponse({"status": "ok"})
+    else:
+        return JsonResponse({"status": "error"})
 
 
 # ==========================================================
@@ -366,11 +411,21 @@ def warehouses_create(request):
     if request.method == "POST":
         form = WarehouseForm(request.POST)
         if form.is_valid():
-            form.save()
+            # Save the warehouse and get the instance
+            warehouse = form.save()
+
+            # Create notification for the admin who created it
+            create_notification(
+                notification_type="warehouse_created",
+                recipient_contact=request.user.email,  # Send to current admin
+                subject="Warehouse Created",
+                message=f"Successfully created warehouse: {warehouse.name}",
+                status="sent"
+            )
+
             return redirect("warehouses_list")
     else:
         form = WarehouseForm()
-
     return render(request, "warehouses/create.html", {"form": form})
 
 
@@ -378,16 +433,25 @@ def warehouses_create(request):
 @role_required(["admin", "staff"])
 def warehouses_edit(request, warehouse_id):
     warehouse = get_object_or_404(Warehouse, pk=warehouse_id)
-
     if request.method == "POST":
         form = WarehouseForm(request.POST, instance=warehouse)
         if form.is_valid():
+            # Save the updated warehouse
             form.save()
+
+            # Create notification for the user who edited it
+            create_notification(
+                notification_type="warehouse_updated",
+                recipient_contact=request.user.email,  # Send to current user (admin/staff)
+                subject="Warehouse Updated",
+                message=f"Successfully updated warehouse: {warehouse.name}",
+                status="sent"
+            )
+
             messages.success(request, "Warehouse updated successfully.")
             return redirect("warehouses_list")
     else:
         form = WarehouseForm(instance=warehouse)
-
     return render(
         request,
         "warehouses/edit.html",
@@ -400,14 +464,28 @@ def warehouses_edit(request, warehouse_id):
 def warehouses_delete(request, warehouse_id):
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
+
     warehouse = get_object_or_404(Warehouse, pk=warehouse_id)
+    # Store the warehouse name before deleting
+    warehouse_name = warehouse.name
+
     try:
         warehouse.delete()
+
+        # Create notification after successful deletion
+        create_notification(
+            notification_type="warehouse_deleted",
+            recipient_contact=request.user.email,  # Send to admin who deleted it
+            subject="Warehouse Deleted",
+            message=f"Successfully deleted warehouse: {warehouse_name}",
+            status="sent"
+        )
+
         messages.success(request, "Warehouse deleted successfully.")
     except Exception:
         messages.error(request, "An error occurred while deleting the warehouse.")
-    return redirect("warehouses_list")
 
+    return redirect("warehouses_list")
 
 # ==========================================================
 #  VEHICLES
@@ -418,11 +496,21 @@ def vehicles_create(request):
     if request.method == "POST":
         form = VehicleForm(request.POST)
         if form.is_valid():
-            form.save()
+            # Save the vehicle and get the instance
+            vehicle = form.save()
+
+            # Create notification for the user who created it
+            create_notification(
+                notification_type="vehicle_created",
+                recipient_contact=request.user.email,  # Send to current admin/manager
+                subject="Vehicle Created",
+                message=f"Successfully created vehicle: {vehicle.plate_number} ({vehicle.brand} {vehicle.model})",
+                status="sent"
+            )
+
             return redirect("vehicles_list")
     else:
         form = VehicleForm()
-
     return render(request, "vehicles/create.html", {"form": form})
 
 
@@ -440,15 +528,24 @@ def vehicles_list(request):
 @role_required(["admin", "manager"])
 def vehicles_edit(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
-
     if request.method == "POST":
         form = VehicleForm(request.POST, instance=vehicle)
         if form.is_valid():
+            # Save the updated vehicle
             form.save()
+
+            # Create notification for the user who edited it
+            create_notification(
+                notification_type="vehicle_updated",
+                recipient_contact=request.user.email,  # Send to current admin/manager
+                subject="Vehicle Updated",
+                message=f"Successfully updated vehicle: {vehicle.plate_number} ({vehicle.brand} {vehicle.model})",
+                status="sent"
+            )
+
             return redirect("vehicles_list")
     else:
         form = VehicleForm(instance=vehicle)
-
     return render(
         request,
         "vehicles/edit.html",
@@ -461,12 +558,27 @@ def vehicles_edit(request, vehicle_id):
 def vehicles_delete(request, vehicle_id):
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
+
     vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
+    # Store vehicle info before deleting
+    vehicle_info = f"{vehicle.plate_number} ({vehicle.brand} {vehicle.model})"
+
     try:
         vehicle.delete()
+
+        # Create notification after successful deletion
+        create_notification(
+            notification_type="vehicle_deleted",
+            recipient_contact=request.user.email,  # Send to admin who deleted it
+            subject="Vehicle Deleted",
+            message=f"Successfully deleted vehicle: {vehicle_info}",
+            status="sent"
+        )
+
         messages.success(request, "Vehicle deleted successfully.")
     except Exception:
         messages.error(request, "An error occurred while deleting the vehicle.")
+
     return redirect("vehicles_list")
 
 
@@ -488,11 +600,21 @@ def routes_create(request):
     if request.method == "POST":
         form = RouteForm(request.POST)
         if form.is_valid():
-            form.save()
+            # Save the route and get the instance
+            route = form.save()
+
+            # Create notification for the admin who created it
+            create_notification(
+                notification_type="route_created",
+                recipient_contact=request.user.email,  # Send to current admin
+                subject="Route Created",
+                message=f"Successfully created route: {route.origin_name} → {route.destination_name}",
+                status="sent"
+            )
+
             return redirect("routes_list")
     else:
         form = RouteForm()
-
     return render(request, "routes/create.html", {"form": form})
 
 
@@ -500,15 +622,24 @@ def routes_create(request):
 @role_required(["admin"])
 def routes_edit(request, route_id):
     route = get_object_or_404(Route, pk=route_id)
-
     if request.method == "POST":
         form = RouteForm(request.POST, instance=route)
         if form.is_valid():
+            # Save the updated route
             form.save()
+
+            # Create notification for the admin who edited it
+            create_notification(
+                notification_type="route_updated",
+                recipient_contact=request.user.email,  # Send to current admin
+                subject="Route Updated",
+                message=f"Successfully updated route: {route.origin_name} → {route.destination_name}",
+                status="sent"
+            )
+
             return redirect("routes_list")
     else:
         form = RouteForm(instance=route)
-
     return render(request, "routes/edit.html", {"form": form, "route": route})
 
 
@@ -517,12 +648,27 @@ def routes_edit(request, route_id):
 def routes_delete(request, route_id):
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
+
     route = get_object_or_404(Route, pk=route_id)
+    # Store route info before deleting
+    route_info = f"{route.origin_name} → {route.destination_name}"
+
     try:
         route.delete()
+
+        # Create notification after successful deletion
+        create_notification(
+            notification_type="route_deleted",
+            recipient_contact=request.user.email,  # Send to admin who deleted it
+            subject="Route Deleted",
+            message=f"Successfully deleted route: {route_info}",
+            status="sent"
+        )
+
         messages.success(request, "Route deleted successfully.")
     except Exception:
         messages.error(request, "An error occurred while deleting the route.")
+
     return redirect("routes_list")
 
 
@@ -540,7 +686,6 @@ def deliveries_list(request):
         deliveries_qs = Delivery.objects.filter(driver=employee) if employee else Delivery.objects.none()
     else:  # client
         deliveries_qs = Delivery.objects.filter(client=request.user)
-
     paginator = Paginator(deliveries_qs, 10)
     page_number = request.GET.get("page")
     deliveries_page = paginator.get_page(page_number)
@@ -559,12 +704,16 @@ def deliveries_create(request):
     if request.method == "POST":
         form = DeliveryForm(request.POST)
         if form.is_valid():
+            # Save the delivery and get the instance
             new_delivery = form.save()
+
+            # Notification for the recipient (client/customer) - existing logic
             recipient = None
             if new_delivery.client and new_delivery.client.contact:
                 recipient = new_delivery.client.contact
             elif new_delivery.recipient_email:
                 recipient = new_delivery.recipient_email
+
             if recipient:
                 create_notification(
                     notification_type="delivery_created",
@@ -572,10 +721,19 @@ def deliveries_create(request):
                     subject="New delivery registered",
                     message=f"Delivery {new_delivery.tracking_number} has been registered.",
                 )
+
+            # Notification for the admin/staff who created it
+            create_notification(
+                notification_type="delivery_created_admin",
+                recipient_contact=request.user.email,  # Send to current admin/staff
+                subject="Delivery Created",
+                message=f"Successfully created delivery: {new_delivery.tracking_number} ({new_delivery.recipient_name})",
+                status="sent"
+            )
+
             return redirect("deliveries_list")
     else:
         form = DeliveryForm()
-
     return render(request, "deliveries/create.html", {"form": form})
 
 
@@ -583,15 +741,24 @@ def deliveries_create(request):
 @role_required(["admin", "staff"])
 def deliveries_edit(request, delivery_id):
     delivery = get_object_or_404(Delivery, pk=delivery_id)
-
     if request.method == "POST":
         form = DeliveryForm(request.POST, instance=delivery)
         if form.is_valid():
+            # Save the updated delivery
             form.save()
+
+            # Create notification for the admin/staff who edited it
+            create_notification(
+                notification_type="delivery_updated",
+                recipient_contact=request.user.email,  # Send to current admin/staff
+                subject="Delivery Updated",
+                message=f"Successfully updated delivery: {delivery.tracking_number} ({delivery.recipient_name})",
+                status="sent"
+            )
+
             return redirect("deliveries_list")
     else:
         form = DeliveryForm(instance=delivery)
-
     return render(request, "deliveries/edit.html", {"form": form, "delivery": delivery})
 
 
@@ -600,12 +767,27 @@ def deliveries_edit(request, delivery_id):
 def deliveries_delete(request, delivery_id):
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method for deletion.")
+
     delivery = get_object_or_404(Delivery, pk=delivery_id)
+    # Store delivery info before deleting
+    delivery_info = f"{delivery.tracking_number} ({delivery.recipient_name})"
+
     try:
         delivery.delete()
+
+        # Create notification after successful deletion
+        create_notification(
+            notification_type="delivery_deleted",
+            recipient_contact=request.user.email,  # Send to admin who deleted it
+            subject="Delivery Deleted",
+            message=f"Successfully deleted delivery: {delivery_info}",
+            status="sent"
+        )
+
         messages.success(request, "Delivery deleted successfully.")
     except Exception:
         messages.error(request, "An error occurred while deleting the delivery.")
+
     return redirect("deliveries_list")
 
 
@@ -643,6 +825,8 @@ def mail_detail(request, mail_id):
 # ==========================================================
 #  JSON EXPORTS (Django side) + IMPORTS
 # ==========================================================
+# ==================== VEHICLES ====================
+
 @login_required
 @role_required(["admin", "manager", "staff"])
 def vehicles_export_json(request):
@@ -658,6 +842,16 @@ def vehicles_export_json(request):
     json_data = json.dumps(cleaned, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="vehicles_export.json"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="vehicles_exported",
+        recipient_contact=request.user.email,
+        subject="Vehicles Exported",
+        message=f"Successfully exported {len(cleaned)} vehicles to JSON",
+        status="sent"
+    )
+
     return response
 
 
@@ -702,6 +896,15 @@ def vehicles_import_json(request):
                 )
                 count += 1
 
+            # Create notification for the user who imported
+            create_notification(
+                notification_type="vehicles_imported",
+                recipient_contact=request.user.email,
+                subject="Vehicles Imported",
+                message=f"Successfully imported {count} vehicles from JSON",
+                status="sent"
+            )
+
             messages.success(request, f"Imported {count} vehicles successfully.")
             return redirect("vehicles_list")
 
@@ -711,7 +914,7 @@ def vehicles_import_json(request):
     return render(request, "vehicles/import.html", {"form": form})
 
 
-
+# ==================== WAREHOUSES ====================
 
 @login_required
 @role_required(["admin", "manager"])
@@ -740,6 +943,16 @@ def warehouses_export_json(request):
     json_data = json.dumps(cleaned, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="warehouses_export.json"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="warehouses_exported",
+        recipient_contact=request.user.email,
+        subject="Warehouses Exported",
+        message=f"Successfully exported {len(cleaned)} warehouses to JSON",
+        status="sent"
+    )
+
     return response
 
 
@@ -780,15 +993,12 @@ def warehouses_import_json(request):
 
                 # =====================================================
                 # 2. MAP BOTH IMPORT & EXPORT FIELD NAMES
-                #    Export JSON uses:
-                #        address → string
-                #        maximum_storage_capacity → integer
                 # =====================================================
                 name = item.get("name")
 
                 address = (
                     item.get("address")
-                    or item.get("location")       # if earlier schema used location
+                    or item.get("location")
                 )
 
                 contact = item.get("contact")
@@ -798,14 +1008,13 @@ def warehouses_import_json(request):
 
                 max_capacity = (
                     item.get("maximum_storage_capacity")
-                    or item.get("capacity")       # fallback
+                    or item.get("capacity")
                 )
 
                 # =====================================================
                 # 3. VALIDATE required NOT NULL fields manually
                 # =====================================================
                 if not name or not address:
-                    # do not import incomplete rows
                     continue
 
                 # =====================================================
@@ -822,6 +1031,15 @@ def warehouses_import_json(request):
 
                 count += 1
 
+            # Create notification for the user who imported
+            create_notification(
+                notification_type="warehouses_imported",
+                recipient_contact=request.user.email,
+                subject="Warehouses Imported",
+                message=f"Successfully imported {count} warehouses from JSON",
+                status="sent"
+            )
+
             messages.success(request, f"Imported {count} warehouses successfully.")
             return redirect("warehouses_list")
 
@@ -830,6 +1048,8 @@ def warehouses_import_json(request):
 
     return render(request, "warehouses/import.html", {"form": form})
 
+
+# ==================== DELIVERIES ====================
 
 @login_required
 @role_required(["admin", "manager"])
@@ -849,6 +1069,16 @@ def deliveries_export_json(request):
     json_data = json.dumps(cleaned, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = "attachment; filename=deliveries.json"
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="deliveries_exported",
+        recipient_contact=request.user.email,
+        subject="Deliveries Exported",
+        message=f"Successfully exported {len(cleaned)} deliveries to JSON",
+        status="sent"
+    )
+
     return response
 
 
@@ -905,6 +1135,15 @@ def deliveries_import_json(request):
 
                 count += 1
 
+            # Create notification for the user who imported
+            create_notification(
+                notification_type="deliveries_imported",
+                recipient_contact=request.user.email,
+                subject="Deliveries Imported",
+                message=f"Successfully imported {count} deliveries from JSON",
+                status="sent"
+            )
+
             messages.success(request, f"Imported {count} deliveries successfully.")
             return redirect("deliveries_list")
 
@@ -914,6 +1153,7 @@ def deliveries_import_json(request):
     return render(request, "deliveries/import.html", {"form": form})
 
 
+# ==================== ROUTES ====================
 
 @login_required
 @role_required(["admin", "manager"])
@@ -971,6 +1211,15 @@ def routes_import_json(request):
 
             count += 1
 
+        # Create notification for the user who imported
+        create_notification(
+            notification_type="routes_imported",
+            recipient_contact=request.user.email,
+            subject="Routes Imported",
+            message=f"Successfully imported {count} routes from JSON",
+            status="sent"
+        )
+
         messages.success(request, f"Imported {count} routes successfully.")
         return redirect("routes_list")
 
@@ -1022,9 +1271,20 @@ def routes_export_json(request):
     json_data = json.dumps(routes, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="routes_export.json"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="routes_exported",
+        recipient_contact=request.user.email,
+        subject="Routes Exported",
+        message=f"Successfully exported {len(routes)} routes to JSON",
+        status="sent"
+    )
+
     return response
 
 
+# ==================== INVOICES ====================
 @login_required
 @role_required(["admin", "manager"])
 def invoices_export_json(request):
@@ -1061,12 +1321,23 @@ def invoices_export_json(request):
     json_data = json.dumps(invoices, indent=4)
     response = HttpResponse(json_data, content_type="application/json")
     response["Content-Disposition"] = 'attachment; filename="invoices_export.json"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="invoices_exported",
+        recipient_contact=request.user.email,
+        subject="Invoices Exported",
+        message=f"Successfully exported {len(invoices)} invoices to JSON",
+        status="sent"
+    )
+
     return response
 
 
 # ==========================================================
 #  CSV EXPORTS (PostgreSQL functions)
 # ==========================================================
+
 @login_required
 @role_required(["admin", "manager"])
 def vehicles_export_csv(request):
@@ -1079,6 +1350,16 @@ def vehicles_export_csv(request):
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="vehicles_export.csv"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="vehicles_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Vehicles Exported",
+        message=f"Successfully exported {len(rows)} vehicles to CSV",
+        status="sent"
+    )
+
     return response
 
 
@@ -1094,6 +1375,16 @@ def warehouses_export_csv(request):
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="warehouses_export.csv"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="warehouses_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Warehouses Exported",
+        message=f"Successfully exported {len(rows)} warehouses to CSV",
+        status="sent"
+    )
+
     return response
 
 
@@ -1116,6 +1407,16 @@ def deliveries_export_csv(request):
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="deliveries_export.csv"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="deliveries_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Deliveries Exported",
+        message=f"Successfully exported {len(rows)} deliveries to CSV",
+        status="sent"
+    )
+
     return response
 
 
@@ -1138,6 +1439,16 @@ def routes_export_csv(request):
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="routes_export.csv"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="routes_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Routes Exported",
+        message=f"Successfully exported {len(rows)} routes to CSV",
+        status="sent"
+    )
+
     return response
 
 
@@ -1157,11 +1468,18 @@ def invoices_export_csv(request):
 
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="invoices_export.csv"'
+
+    # Create notification for the user who exported
+    create_notification(
+        notification_type="invoices_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Invoices Exported",
+        message=f"Successfully exported {len(rows)} invoices to CSV",
+        status="sent"
+    )
+
     return response
 
 
-# ==========================================================
-#  MONGO: NOTIFICATIONS ONLY
-# ==========================================================
 
-from .notifications import create_notification
+
