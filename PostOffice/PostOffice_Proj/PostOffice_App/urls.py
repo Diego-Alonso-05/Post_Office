@@ -75,6 +75,7 @@ urlpatterns = [
     path("invoices/import/json/", invoices.invoices_import_json, name="invoices_import_json"),
     path("invoices/export/json/", invoices.invoices_export_json, name="invoices_export_json"),
     path("invoices/export/csv/", invoices.invoices_export_csv, name="invoices_export_csv"),
+    path("invoices/export/pdf/", invoices.invoices_export_pdf, name="invoices_export_pdf"),
 
     # Users / Clients (admin)
     path("users/", users.users_list, name="users_list"),

@@ -2,7 +2,7 @@ from django import forms
 from django.utils import timezone
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from .models import (
-    User, Employee, EmployeeDriver, EmployeeStaff,
+    InvoiceItem, User, Employee, EmployeeDriver, EmployeeStaff,
     Warehouse, Vehicle, Invoice, Route, Delivery
 )
 
@@ -170,6 +170,14 @@ class InvoiceForm(forms.ModelForm):
         ]
         widgets = {
             "invoice_datetime": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+        }
+
+class InvoiceItemForm(forms.ModelForm):
+    class Meta:
+        model = InvoiceItem
+        fields = ["shipment_type", "weight", "delivery_speed", "quantity", "unit_price", "notes"]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2}),
         }
 
 

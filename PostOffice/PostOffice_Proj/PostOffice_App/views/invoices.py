@@ -4,105 +4,142 @@
 from datetime import datetime
 from decimal import Decimal
 import json
+from django.db.models import Sum, F
+from django.forms import inlineformset_factory
+
 from pyexpat.errors import messages
 from django.db import connection
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
-from ..models import Invoice, User
+from ..models import Invoice, User , InvoiceItem
 from ..forms import InvoiceForm
 from .decorators import role_required
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-
+from django.db.models import Prefetch
 from ..notifications import create_notification
+from xhtml2pdf import pisa
+from django.forms import modelformset_factory
+from ..models import InvoiceItem
+from django.template.loader import get_template
+from django.db.models import F, ExpressionWrapper, DecimalField
+
+# Create an inline formset so InvoiceItem is linked to Invoice automatically
+InvoiceItemFormSet = inlineformset_factory(
+    Invoice,
+    InvoiceItem,
+    fields=["shipment_type", "weight", "delivery_speed", "quantity", "unit_price", "notes"],
+    extra=1,        # show one extra blank row for adding a new item
+    can_delete=True # allow deleting items
+)
+
+
+
 
 @login_required
 @role_required(["admin", "client"])
+@login_required
+@role_required(["admin", "client"])
 def invoice_list(request):
-    """List all invoices (admin sees all, clients see only their own)"""
     if request.user.role == "client":
-        invoices_qs = Invoice.objects.filter(user=request.user).order_by("-invoice_datetime")
+        invoices_qs = Invoice.objects.filter(user=request.user).prefetch_related('items').order_by("-invoice_datetime")
     else:
-        invoices_qs = Invoice.objects.select_related("user").all().order_by("-invoice_datetime")
+        invoices_qs = Invoice.objects.prefetch_related('items').order_by("-invoice_datetime")
 
-    paginator = Paginator(invoices_qs, 10)
-    page_number = request.GET.get("page")
-    invoices_page = paginator.get_page(page_number)
+    invoices = []
+    for inv in invoices_qs:
+        # Compute total_price dynamically for each item
+        items = inv.items.annotate(
+            total_price=ExpressionWrapper(
+                F("quantity") * F("unit_price"),
+                output_field=DecimalField(max_digits=10, decimal_places=2)
+            )
+        )
 
-    return render(request, "invoices/list.html", {"invoices": invoices_page})
+        subtotal = items.aggregate(subtotal=Sum('total_price'))['subtotal'] or 0
+        tax = subtotal * Decimal("0.23")
+        total = subtotal + tax
 
+        inv.subtotal = subtotal
+        inv.tax = tax
+        inv.total = total
+        inv.items_annotated = items  # pass annotated items to template
+        invoices.append(inv)
+
+    return render(request, "invoices/list.html", {"invoices": invoices})
 
 @login_required
 @role_required(["admin"])
 def invoice_create(request):
-    """Create a new invoice"""
     if request.method == "POST":
         form = InvoiceForm(request.POST)
-        if form.is_valid():
-            # Save the invoice and get the instance
-            invoice_obj = form.save()
+        formset = InvoiceItemFormSet(request.POST)
 
-            # Notification for the client (if they have contact/email)
-            if invoice_obj.user and invoice_obj.user.email:
-                create_notification(
-                    notification_type="invoice_created",
-                    recipient_contact=invoice_obj.user.email,
-                    subject="New Invoice",
-                    message=f"Invoice #{invoice_obj.id_invoice} has been created for €{invoice_obj.cost}.",
-                )
+        if form.is_valid() and formset.is_valid():
+            invoice = form.save()
+            formset.instance = invoice
+            formset.save()
 
-            # Notification for the admin who created it
             create_notification(
                 notification_type="invoice_created_admin",
                 recipient_contact=request.user.email,
                 subject="Invoice Created",
-                message=f" Successfully created invoice #{invoice_obj.id_invoice} (€{invoice_obj.cost})",
-                status="sent"
+                message=f"Successfully created invoice #{invoice.id_invoice}",
+                status="sent",
             )
 
             return redirect("invoice_list")
     else:
         form = InvoiceForm()
+        formset = InvoiceItemFormSet()
 
-    return render(request, "invoices/create.html", {"form": form})
-
+    return render(
+        request,
+        "invoices/create.html",
+        {
+            "form": form,
+            "formset": formset,
+        },
+    )
 
 @login_required
 @role_required(["admin"])
 def invoice_edit(request, invoice_id):
-    """Edit an existing invoice"""
     invoice = get_object_or_404(Invoice, pk=invoice_id)
 
     if request.method == "POST":
         form = InvoiceForm(request.POST, instance=invoice)
-        if form.is_valid():
-            # Save the updated invoice
-            invoice_obj = form.save()
+        formset = InvoiceItemFormSet(request.POST, instance=invoice)
 
-            # Notification for the client (if they have contact/email)
-            if invoice_obj.user and invoice_obj.user.email:
-                create_notification(
-                    notification_type="invoice_updated",
-                    recipient_contact=invoice_obj.user.email,
-                    subject="Invoice Updated",
-                    message=f"Invoice #{invoice_obj.id_invoice} has been updated.",
-                )
+        if form.is_valid() and formset.is_valid():
+            invoice = form.save()
 
-            # Notification for the admin who edited it
+            formset.instance = invoice
+            print(formset.cleaned_data)
+            formset.save()
+
             create_notification(
                 notification_type="invoice_updated_admin",
                 recipient_contact=request.user.email,
                 subject="Invoice Updated",
-                message=f"Successfully updated invoice #{invoice_obj.id_invoice} (€{invoice_obj.cost})",
-                status="sent"
+                message=f"Successfully updated invoice #{invoice.id_invoice}",
+                status="sent",
             )
 
             return redirect("invoice_list")
     else:
         form = InvoiceForm(instance=invoice)
+        formset = InvoiceItemFormSet(instance=invoice)
 
-    return render(request, "invoices/edit.html", {"form": form, "invoice": invoice})
-
+    return render(
+        request,
+        "invoices/edit.html",
+        {
+            "form": form,
+            "formset": formset,
+            "invoice": invoice,
+        },
+    )
 
 @login_required
 @role_required(["admin"])
@@ -132,7 +169,6 @@ def invoice_delete(request, invoice_id):
         messages.error(request, "An error occurred while deleting the invoice.")
 
     return redirect("invoice_list")
-
 
 # ==========================================================
 # IMPORT/EXPORT JSON
@@ -258,4 +294,45 @@ def invoices_export_csv(request):
         status="sent"
     )
 
+    return response
+
+# ==================== Export PDF ====================
+# ================== Export PDF ==================
+@login_required
+@role_required(["admin", "client"])
+def invoices_export_pdf(request):
+    if request.user.role == "client":
+        invoices_qs = Invoice.objects.filter(user=request.user).prefetch_related("items").order_by("-invoice_datetime")
+    else:
+        invoices_qs = Invoice.objects.prefetch_related("items").order_by("-invoice_datetime")
+
+    invoices = []
+    for inv in invoices_qs:
+        # Compute totals dynamically
+        items = inv.items.annotate(
+            total_price=ExpressionWrapper(
+                F("quantity") * F("unit_price"),
+                output_field=DecimalField(max_digits=10, decimal_places=2)
+            )
+        )
+        subtotal = items.aggregate(subtotal=Sum("total_price"))["subtotal"] or Decimal("0.00")
+        tax = subtotal * Decimal("0.23")
+        total = subtotal + tax
+        invoices.append({
+            "invoice": inv,
+            "subtotal": subtotal,
+            "tax": tax,
+            "total": total,
+            "items": items
+        })
+
+    template = get_template("invoices/pdf_template.html")
+    html = template.render({"invoices": invoices})
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="invoices.pdf"'
+
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse("Error generating PDF", status=500)
     return response

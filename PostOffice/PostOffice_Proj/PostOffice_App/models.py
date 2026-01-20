@@ -3,8 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from decimal import Decimal
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
-
-
+from django import forms
+from django.db.models import F
 # ==========================================================
 #  USER & EMPLOYEE HIERARCHY (replaces Mongo "users")
 #  - Keeps role-based logic from views2.py
@@ -192,8 +192,36 @@ class Invoice(models.Model):
         return f"Invoice {self.pk} ({self.invoice_status})"
 
     class Meta:
+        db_table = '"PostOffice_App_invoice"'
         ordering = ["-invoice_datetime", "pk"]
+        managed = True
 
+class InvoiceItem(models.Model):
+    id_item = models.AutoField(primary_key=True)
+    invoice = models.ForeignKey(
+        Invoice,
+        related_name="items",
+        on_delete=models.CASCADE,
+        db_column="invoice_id",
+    )
+    shipment_type = models.CharField(max_length=50)
+    weight = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_speed = models.CharField(max_length=50)
+    quantity = models.IntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = '"postoffice_app_invoice_items"'
+    def save(self, *args, **kwargs):
+        self.total_price = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+class InvoiceItemForm(forms.ModelForm):
+    class Meta:
+        model = InvoiceItem
+        # Exclude total_price so Django won't try to insert/update it
+        exclude = ['total_price']
 
 # ==========================================================
 #  ROUTES (routes.json + logic of views1/views2)
