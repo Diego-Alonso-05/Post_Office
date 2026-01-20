@@ -1,22 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}Warehouses — Mailly{% endblock %}
 {% block content %}
-<div class="card">
 <div style="display:flex; justify-content:space-between; align-items:center;">
   <h3 style="margin:0;">Warehouses</h3>
   {% if request.user.role == 'admin' %}
-    <div style="display:flex; gap:8px;">
-      <a class="btn btn-primary" href="{% url 'warehouses_create' %}">
-        <i class="fa fa-plus"></i> Add Warehouse
-      </a>
-      <a href="{% url 'warehouses_export_json' %}" class="btn btn-secondary">Export JSON</a>
-      <a href="{% url 'warehouses_import_json' %}" class="btn btn-secondary">Import JSON</a>
-      <a href="{% url 'warehouses_export_csv' %}" class="btn btn-info">Export CSV</a>
-    </div>
+  <div style="display:flex; gap:8px;">
+    <a class="btn btn-primary" href="{% url 'warehouses_create' %}">
+      + New Warehouse
+    </a>
+    <a class="btn btn-warning" href="{% url 'warehouses_import_json' %}">
+      <i class="fa fa-upload"></i> Import JSON
+    </a>
+    <a class="btn btn-success" href="{% url 'warehouses_export_json' %}">
+      <i class="fa fa-download"></i> Export JSON
+    </a>
+    <a class="btn btn-info" href="{% url 'warehouses_export_csv' %}">
+      <i class="fa fa-file-csv"></i> Export CSV
+    </a>
+  </div>
   {% endif %}
 </div>
-
-  <table class="table" style="margin-top:16px;">
+<div class="card" style="margin-top:12px;">
+  <table class="table">
     <thead>
       <tr>
         <th>Name</th>

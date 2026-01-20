@@ -42,17 +42,65 @@
          border:1px solid rgba(255,255,255,0.03);cursor:pointer}
     .btn-primary{background:linear-gradient(180deg,var(--brand),var(--brand-dark));color:#071022;border:none}
 
+    /* notification button */
+    .btn-notif {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:9px 12px;
+      border-radius:10px;
+      background:linear-gradient(180deg,var(--card),#071222);
+      border:1px solid rgba(255,255,255,0.03);
+      font-size:18px;
+      cursor:pointer;
+      color:var(--accent);
+      min-width:44px;
+      height:38px;
+    }
+    .btn-notif:hover {
+      background:linear-gradient(180deg,#0d182b,#081223);
+    }
+
+    /* notif dropdown */
+    #notif-menu {
+      display:none;
+      position:fixed;
+      top:80px;
+      right:40px;
+      background:var(--card);
+      color:#e6eef8;
+      border:1px solid rgba(255,255,255,0.05);
+      border-radius:12px;
+      list-style:none;
+      padding:10px;
+      width:300px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.55);
+      backdrop-filter:blur(6px);
+      z-index:9999;
+    }
+    #notif-menu li {
+      padding:10px;
+      border-bottom:1px solid rgba(255,255,255,0.05);
+      cursor:pointer;
+      font-size:14px;
+    }
+    #notif-menu li:last-child {
+      border-bottom:none;
+    }
+    #notif-menu small {
+      color:var(--muted);
+      font-size:12px;
+    }
+
     /* GRID */
     .grid{display:grid;grid-template-columns:260px 1fr;gap:18px}
     .sidebar{background:var(--card);padding:14px;border-radius:12px}
     .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:18px;border-radius:12px}
 
-    /* widgets */
     .stats{display:flex;gap:12px}
     .stat{flex:1;padding:14px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.012),rgba(255,255,255,0.01))}
     .muted{color:var(--muted);font-size:13px}
 
-    /* forms */
     label{display:block;font-weight:600;margin-bottom:8px}
     input[type=text],input[type=password],input[type=email],select,textarea{
       width:100%;padding:12px;border-radius:10px;
@@ -80,49 +128,25 @@
       </div>
       <nav class="nav-links">
         {% if request.user.is_authenticated %}
-          <!-- Dashboard is always visible for logged-in users -->
           <a class="btn" href="{% url 'dashboard' %}">Dashboard</a>
-          <!-- Links per role -->
           {% if request.session.role == "admin" %}
               <a class="btn" href="{% url 'warehouses_list' %}">Warehouses</a>
               <a class="btn" href="{% url 'vehicles_list' %}">Vehicles</a>
-        <a class="btn" href="{% url 'routes_list' %}">Routes</a>
+              <a class="btn" href="{% url 'routes_list' %}">Routes</a>
               <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
+              <a class="btn" href="{% url 'invoice_list' %}">Invoices</a>
           {% elif request.session.role == "driver" %}
               <a class="btn" href="{% url 'deliveries_list' %}">Deliveries</a>
           {% elif request.session.role == "client" %}
               <a class="btn" href="{% url 'client_profile' %}">Profile</a>
           {% endif %}
-          <!-- Links per role -->
-<!-- Notifications -->
-<button id="notifDropdown"
-        style="background:red;color:white;
-               font-size:20px;
-               border:none;
-               padding:10px;
-               border-radius:10px;">
-  🔔
-</button>
 
-<ul id="notif-menu"
-    style="display:none;
-           position:fixed;
-           top:80px;
-           right:40px;
-           background:white;
-           color:black;
-           border-radius:12px;
-           list-style:none;
-           padding:10px;
-           width:300px;
-           z-index:9999;">
-</ul>
+          <button id="notifDropdown" class="btn-notif">🔔</button>
+          <ul id="notif-menu"></ul>
 
-          <!-- Logout -->
           <a class="btn" href="{% url 'logout' %}">Logout</a>
 
         {% else %}
-          <!-- Not logged in -->
           <a class="btn" href="{% url 'login' %}">Login</a>
           <a class="btn btn-primary" href="{% url 'register' %}">Register</a>
         {% endif %}
@@ -153,16 +177,10 @@ document.addEventListener("DOMContentLoaded", function() {
     .then(r => r.json())
     .then(data => {
       menu.innerHTML = "";
-      let unread = 0;
-
       data.notifications.forEach(n => {
-        if(!n.is_read) unread++;
-
         menu.innerHTML += `
-          <li style="padding:8px;border-bottom:1px solid #1f2933;
-                     cursor:pointer;font-weight:${n.is_read ? 'normal':'bold'}"
-              onclick="markRead(${n.id})">
-              ${n.message}<br><small>${n.created_at}</small>
+          <li onclick="markRead(${n.id})" style="font-weight:${n.is_read ? 'normal':'bold'}">
+            ${n.message}<br><small>${n.created_at}</small>
           </li>`;
       });
     });
@@ -176,8 +194,5 @@ document.addEventListener("DOMContentLoaded", function() {
 
 });
 </script>
-
-
-
 </body>
 </html>

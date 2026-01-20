@@ -9,15 +9,12 @@
       <a class="btn btn-primary" href="{% url 'deliveries_create' %}">
           + New Delivery
       </a>
-
-      <a class="btn btn-success" href="{% url 'deliveries_export_json' %}">
-          <i class="fa fa-download"></i> Export JSON
-      </a>
-
       <a class="btn btn-warning" href="{% url 'deliveries_import_json' %}">
           <i class="fa fa-upload"></i> Import JSON
       </a>
-
+      <a class="btn btn-success" href="{% url 'deliveries_export_json' %}">
+          <i class="fa fa-download"></i> Export JSON
+      </a>
       <a class="btn btn-info" href="{% url 'deliveries_export_csv' %}">
           <i class="fa fa-file-csv"></i> Export CSV
       </a>

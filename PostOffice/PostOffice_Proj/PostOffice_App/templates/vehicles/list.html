@@ -1,37 +1,29 @@
 {% extends 'base.html' %}
 {% block title %}Vehicles — Mailly{% endblock %}
 {% block content %}
-<div class="card">
-
-  <!-- Header -->
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <h3 style="margin:0;">Vehicles</h3>
-
-    <div style="display:flex; gap:8px;">
-      {% if request.user.role == 'admin' or request.user.role == 'manager' %}
-        <a class="btn btn-primary" href="{% url 'vehicles_create' %}">
-          <i class="fa fa-plus"></i> Add Vehicle
-        </a>
-      {% endif %}
-
-      <a class="btn btn-secondary" href="{% url 'vehicles_export_json' %}">
-        <i class="fa fa-download"></i> Export JSON
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  <h3 style="margin:0;">Vehicles</h3>
+  <div style="display:flex; gap:8px;">
+    {% if request.user.role == 'admin' or request.user.role == 'manager' %}
+      <a class="btn btn-primary" href="{% url 'vehicles_create' %}">
+        + New Vehicle
       </a>
-
-      <a class="btn btn-secondary" href="{% url 'vehicles_import_json' %}">
+    {% endif %}
+      {% if request.user.role == 'admin' or request.user.role == 'manager' %}
+      <a class="btn btn-warning" href="{% url 'vehicles_import_json' %}">
         <i class="fa fa-upload"></i> Import JSON
       </a>
-
-      <!-- Nuevo botón: Export CSV -->
-      <a class="btn btn-info" href="{% url 'vehicles_export_csv' %}">
-        Export CSV
-      </a>
-
-    </div>
+    {% endif %}
+    <a class="btn btn-success" href="{% url 'vehicles_export_json' %}">
+      <i class="fa fa-download"></i> Export JSON
+    </a>
+    <a class="btn btn-info" href="{% url 'vehicles_export_csv' %}">
+      <i class="fa fa-file-csv"></i> Export CSV
+    </a>
   </div>
-
-  <!-- Table -->
-  <table class="table" style="margin-top:16px;">
+</div>
+<div class="card" style="margin-top:12px;">
+  <table class="table">
     <thead>
       <tr>
         <th>Plate</th>
@@ -42,17 +34,15 @@
         <th>Fuel</th>
         <th>Capacity</th>
         <th>Last Maintenance</th>
-        <th style="width:120px; text-align:right;">Actions</th>
+        <th style="text-align:right;">Actions</th>
       </tr>
     </thead>
-
     <tbody>
       {% for v in vehicles %}
       <tr>
         <td><strong>{{ v.plate_number }}</strong></td>
         <td class="muted">{{ v.model }}</td>
         <td class="muted">{{ v.brand }}</td>
-
         <td>
           {% if v.vehicle_status %}
             {{ v.vehicle_status|title }}
@@ -60,7 +50,6 @@
             <span class="muted">Unknown</span>
           {% endif %}
         </td>
-
         <td class="muted">
           {% if v.year %}
             {{ v.year }}
@@ -68,7 +57,6 @@
             —
           {% endif %}
         </td>
-
         <td class="muted">
           {% if v.fuel_type %}
             {{ v.fuel_type|title }}
@@ -76,7 +64,6 @@
             —
           {% endif %}
         </td>
-
         <td class="muted">
           {% if v.capacity %}
             {{ v.capacity }} kg
@@ -84,7 +71,6 @@
             —
           {% endif %}
         </td>
-
         <td class="muted">
           {% if v.last_maintenance_date %}
             {{ v.last_maintenance_date }}
@@ -92,7 +78,6 @@
             —
           {% endif %}
         </td>
-
         <td style="text-align:right;">
           {% if request.user.role == 'admin' or request.user.role == 'manager' %}
             <a class="btn" href="{% url 'vehicles_edit' v.id %}">Edit</a>
@@ -107,7 +92,6 @@
       </tr>
       {% endfor %}
     </tbody>
-
   </table>
 </div>
 {% endblock %}
