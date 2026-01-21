@@ -229,6 +229,68 @@ CREATE MATERIALIZED VIEW mv_monthly_sales AS
 
 --------------------------- procedures ---------------------------
 
+-- check_driver_vehicle_availability
+CREATE OR REPLACE FUNCTION check_driver_vehicle_availability(
+    p_driver_id INT,
+    p_vehicle_id INT,
+    p_delivery_date DATE
+) RETURNS BOOLEAN AS $$
+DECLARE
+    conflicting_routes INT;
+BEGIN
+    SELECT COUNT(*) INTO conflicting_routes
+    FROM "PostOffice_App_route"
+    WHERE delivery_date = p_delivery_date
+      AND (driver_id = p_driver_id OR vehicle_id = p_vehicle_id);
+
+    IF conflicting_routes > 0 THEN
+        RAISE EXCEPTION 'Driver or Vehicle is already assigned on %', p_delivery_date;
+        RETURN FALSE;
+    ELSE
+        RETURN TRUE;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- validate_delivery_status_transition
+CREATE OR REPLACE FUNCTION validate_delivery_status_transition(
+    p_delivery_id INT,
+    p_new_status VARCHAR
+) RETURNS BOOLEAN AS $$
+DECLARE
+    current_status VARCHAR;
+BEGIN
+    SELECT status INTO current_status
+    FROM "PostOffice_App_delivery"
+    WHERE id = p_delivery_id;
+
+    IF current_status IS NULL THEN
+        RAISE EXCEPTION 'Delivery not found';
+    END IF;
+
+    CASE current_status
+        WHEN 'Registered' THEN
+            IF p_new_status NOT IN ('Ready', 'Cancelled') THEN
+                RAISE EXCEPTION 'Invalid transition from Registered to %', p_new_status;
+            END IF;
+        WHEN 'Ready' THEN
+            IF p_new_status NOT IN ('In Transit', 'Cancelled') THEN
+                RAISE EXCEPTION 'Invalid transition from Ready to %', p_new_status;
+            END IF;
+        WHEN 'In Transit' THEN
+            IF p_new_status NOT IN ('Completed', 'Cancelled') THEN
+                RAISE EXCEPTION 'Invalid transition from In Transit to %', p_new_status;
+            END IF;
+        WHEN 'Completed' THEN
+            RAISE EXCEPTION 'Completed deliveries cannot change status';
+        WHEN 'Cancelled' THEN
+            RAISE EXCEPTION 'Cancelled deliveries cannot change status';
+    END CASE;
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
 
 --------------------------- simple_views ---------------------------
 
