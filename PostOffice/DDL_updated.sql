@@ -422,10 +422,6 @@ CREATE TABLE postoffice_app_delivery (
 
     delivery_date           DATE            NULL,
 
-    -- Soft delete support
-    is_deleted              BOOLEAN         NOT NULL DEFAULT FALSE,
-    deleted_at              TIMESTAMPTZ     NULL,
-
     created_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
 
     -- Constraints
