@@ -261,9 +261,7 @@ CREATE TABLE postoffice_app_invoice (
     invoice_type        VARCHAR(50)     DEFAULT '',
     quantity            INTEGER         NULL,
     invoice_datetime    TIMESTAMPTZ     NULL,
-    cost                DECIMAL(10,2)   NULL,           -- Total (auto-calculated)
-    subtotal            DECIMAL(10,2)   NULL,           -- Sum of items (before tax)
-    tax_amount          DECIMAL(10,2)   NULL,           -- Calculated tax (23%)
+    cost                DECIMAL(10,2)   NULL, -- InvoiceTotal: calculate with trg_invoice_update_cost: SUM(invoice_item.total_item_cost)
     paid                BOOLEAN         NOT NULL DEFAULT FALSE,
     payment_method      VARCHAR(50)     DEFAULT '',
 
@@ -304,6 +302,7 @@ CREATE TABLE postoffice_app_invoiceitem (
     delivery_speed      VARCHAR(50)     NOT NULL,
     quantity            INTEGER         NOT NULL DEFAULT 1,
     unit_price          DECIMAL(10,2)   NOT NULL,
+    total_item_cost     DECIMAL(10,2)   NOT NULL, -- calculated with trg_invoice_item_calc_total: quantity*unit_price
     notes               TEXT            DEFAULT '',
 
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
