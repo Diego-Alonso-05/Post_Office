@@ -1,3 +1,12 @@
+# CREATING THE BD:
+1. Run Django migrations first (enable django login handling)
+    * Django migrations create identity(USERS) tables only -> minimal models.py
+    python manage.py makemigrations PostOffice_App
+    py manage.py migrate
+2. Run the DDL.sql in pgadmin QueryTool:
+    * Create all the data infrastructure
+
+
 # Refactoring Analysis: Django ORM to Database Objects
 
 This document maps all current Django ORM operations to their appropriate PostgreSQL database objects (Views, Materialized Views, Triggers, Functions, Procedures).
