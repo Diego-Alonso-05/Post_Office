@@ -43,7 +43,10 @@ A driver's journey from a warehouse carrying deliveries.
 # DELIVERY
 Individual package to be delivered. Sender/recipient info is stored as flattened snapshot fields because they may not be registered users.
 # DELIVERY_TRACKING
-Append-only event log recording every status change of a delivery.
+Append-only event log recording every status change of a delivery. Each row represents an event — when, where, who, and to which status.
+  The DELIVERY table holds only the current status. DELIVERY_TRACKING stores all past statuses, allowing the full journey of a package to be traced.
+  How it is populated
+  Through the trigger trg_delivery_tracking_log, which fires automatically AFTER INSERT OR UPDATE OF status ON DELIVERY. Whenever a delivery's status changes (via sp_update_delivery_status()), the trigger inserts a new row into DELIVERY_TRACKING with the del_id, new status, staff_id, war_id, and timestamp — with no application-level logic required in Django.
 
 # NOTIFICATION (MongoDB - ignore for PostGreSQL)
 Notification records stored in MongoDB.

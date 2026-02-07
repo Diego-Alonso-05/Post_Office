@@ -29,6 +29,7 @@ DROP TABLE IF EXISTS CLIENT CASCADE;
 -- All other tables below reference "USER"(ID) via foreign keys.
 
 -- Includes index creation on FK columns to improve join performance
+--  USER.ROLE ->  'admin' || 'client' || 'driver' || 'staff' || 'manager'
 
 /*==============================================================*/
 /* Table: CLIENT                                                */
@@ -50,11 +51,12 @@ create table WAREHOUSE (
    SCHEDULE_OPEN        TIME                 null,
    SCHEDULE_CLOSE       TIME                 null,
    SCHEDULE             TEXT                 null,
-   MAXIMUM_STORAGE_CAPACITY INT4                 not null,
+   MAXIMUM_STORAGE_CAPACITY INT4                 not null, -- (>=1)
    IS_ACTIVE            BOOL                 not null,
    CREATED_AT           TIMESTAMPTZ          not null,
    UPDATED_AT           TIMESTAMPTZ          not null,
-   constraint PK_WAREHOUSE primary key (ID)
+   constraint PK_WAREHOUSE primary key (ID),
+   constraint CHK_WAREHOUSE_CAPACITY CHECK (MAXIMUM_STORAGE_CAPACITY >= 1)
 );
 
 /*==============================================================*/
@@ -63,12 +65,13 @@ create table WAREHOUSE (
 create table EMPLOYEE (
    ID                   INT4                 not null,
    WAR_ID               INT4                 null,
-   EMP_POSITION         VARCHAR(32)          null,
+   EMP_POSITION         VARCHAR(32)          null, --  'driver' || 'staff'
    SCHEDULE             VARCHAR(255)         null,
    WAGE                 DECIMAL(10,2)        null,
    IS_ACTIVE            BOOL                 null,
    HIRE_DATE            DATE                 null,
-   constraint PK_EMPLOYEE primary key (ID)
+   constraint PK_EMPLOYEE primary key (ID),
+   constraint CHK_EMPLOYEE_POSITION CHECK (EMP_POSITION IN ('driver', 'staff'))
 );
 
 create index WORKS_AT_FK on EMPLOYEE (WAR_ID);
@@ -79,11 +82,13 @@ create index WORKS_AT_FK on EMPLOYEE (WAR_ID);
 create table EMPLOYEE_DRIVER (
    ID                   INT4                 not null,
    LICENSE_NUMBER       VARCHAR(50)          null,
-   LICENSE_CATEGORY     VARCHAR(20)          null,
+   LICENSE_CATEGORY     VARCHAR(20)          null, -- 'A' ||'B' ||'C' ||'D'
    LICENSE_EXPIRY_DATE  DATE                 null,
    DRIVING_EXPERIENCE_YEARS INT4                 null,
-   DRIVER_STATUS        VARCHAR(20)          null,
-   constraint PK_EMPLOYEE_DRIVER primary key (ID)
+   DRIVER_STATUS        VARCHAR(20)          null, -- 'available' || 'on_duty' || 'off_duty' || 'on_break'
+   constraint PK_EMPLOYEE_DRIVER primary key (ID),
+   constraint CHK_DRIVER_LICENSE_CAT CHECK (LICENSE_CATEGORY IN ('A', 'B', 'C', 'D')),
+   constraint CHK_DRIVER_STATUS CHECK (DRIVER_STATUS IN ('available', 'on_duty', 'off_duty', 'on_break'))
 );
 
 /*==============================================================*/
@@ -91,8 +96,9 @@ create table EMPLOYEE_DRIVER (
 /*==============================================================*/
 create table EMPLOYEE_STAFF (
    ID                   INT4                 not null,
-   DEPARTMENT           VARCHAR(32)          null,
-   constraint PK_EMPLOYEE_STAFF primary key (ID)
+   DEPARTMENT           VARCHAR(32)          null, -- 'customer_service' || 'sorting' || 'administration'
+   constraint PK_EMPLOYEE_STAFF primary key (ID),
+   constraint CHK_STAFF_DEPARTMENT CHECK (DEPARTMENT IN ('customer_service', 'sorting', 'administration'))
 );
 
 /*==============================================================*/
@@ -100,19 +106,22 @@ create table EMPLOYEE_STAFF (
 /*==============================================================*/
 create table VEHICLE (
    ID                   SERIAL               not null,
-   VEHICLE_TYPE         VARCHAR(50)          null,
+   VEHICLE_TYPE         VARCHAR(50)          null, -- 'van' || 'truck' || 'motorcycle' || 'bicycle' || 'car'
    PLATE_NUMBER         VARCHAR(20)          null,
    CAPACITY             DECIMAL(10,2)        null,
    BRAND                VARCHAR(50)          null,
    MODEL                VARCHAR(50)          null,
-   VEHICLE_STATUS       VARCHAR(20)          null,
+   VEHICLE_STATUS       VARCHAR(20)          null, -- 'available' || 'in_use' || 'maintenance' || 'out_of_service'
    YEAR                 INT4                 null,
-   FUEL_TYPE            VARCHAR(30)          null,
+   FUEL_TYPE            VARCHAR(30)          null, -- 'diesel' || 'petrol' || 'electric' || 'hybrid'
    LAST_MAINTENANCE_DATE DATE                null,
    IS_ACTIVE            BOOL                 null,
    CREATED_AT           TIMESTAMPTZ          null,
    UPDATED_AT           TIMESTAMPTZ          null,
-   constraint PK_VEHICLE primary key (ID)
+   constraint PK_VEHICLE primary key (ID),
+   constraint CHK_VEHICLE_TYPE CHECK (VEHICLE_TYPE IN ('van', 'truck', 'motorcycle', 'bicycle', 'car')),
+   constraint CHK_VEHICLE_STATUS CHECK (VEHICLE_STATUS IN ('available', 'in_use', 'maintenance', 'out_of_service')),
+   constraint CHK_VEHICLE_FUEL CHECK (FUEL_TYPE IN ('diesel', 'petrol', 'electric', 'hybrid'))
 );
 
 /*==============================================================*/
@@ -123,18 +132,21 @@ create table INVOICE (
    WAR_ID               INT4                 null,
    STAFF_ID             INT4                 null,
    CLIENT_ID            INT4                 null,
-   STATUS               VARCHAR(30)          null,
-   TYPE                 VARCHAR(30)          null,
+   STATUS               VARCHAR(30)          null, -- 'pending' || 'completed' || 'cancelled' || 'refunded'
+   TYPE                 VARCHAR(30)          null, --  'paid_on_send' || 'paid_on_delivery'
    QUANTITY             INT4                 null,
    COST                 DECIMAL(10,2)        null,
    PAID                 BOOL                 null,
-   PAY_METHOD           VARCHAR(30)          null,
+   PAY_METHOD           VARCHAR(30)          null, -- 'cash' || 'card' || 'mobile_payment' || 'account'
    NAME                 TEXT                 null,
    ADDRESS              TEXT                 null,
    CONTACT              TEXT                 null,
    CREATED_AT           TIMESTAMPTZ          not null,
    UPDATED_AT           TIMESTAMPTZ          not null,
-   constraint PK_INVOICE primary key (ID)
+   constraint PK_INVOICE primary key (ID),
+   constraint CHK_INVOICE_STATUS CHECK (STATUS IN ('pending', 'completed', 'cancelled', 'refunded')),
+   constraint CHK_INVOICE_TYPE CHECK (TYPE IN ('paid_on_send', 'paid_on_delivery')),
+   constraint CHK_INVOICE_PAY_METHOD CHECK (PAY_METHOD IN ('cash', 'card', 'mobile_payment', 'account'))
 );
 
 create index PROCESSES_FK on INVOICE (STAFF_ID);
@@ -170,7 +182,7 @@ create table ROUTE (
    VEHICLE_ID           INT4                 null,
    WAR_ID               INT4                 null,
    DESCRIPTION          TEXT                 null,
-   DELIVERY_STATUS      VARCHAR(20)          null,
+   DELIVERY_STATUS      VARCHAR(20)          null, -- 'not_started' || 'on_going' || 'finished' || 'cancelled'
    DELIVERY_DATE        DATE                 null,
    DELIVERY_START_TIME  TIMESTAMPTZ          null,
    DELIVERY_END_TIME    TIMESTAMPTZ          null,
@@ -180,7 +192,8 @@ create table ROUTE (
    IS_ACTIVE            BOOL                 null,
    CREATED_AT           TIMESTAMPTZ          null,
    UPDATED_AT           TIMESTAMPTZ          null,
-   constraint PK_ROUTE primary key (ID)
+   constraint PK_ROUTE primary key (ID),
+   constraint CHK_ROUTE_STATUS CHECK (DELIVERY_STATUS IN ('not_started', 'on_going', 'finished', 'cancelled'))
 );
 
 create index IS_ASSIGNED_TO_FK on ROUTE (DRIVER_ID);
@@ -208,15 +221,18 @@ create table DELIVERY (
    RECIPIENT_PHONE      VARCHAR(20)          null,
    RECIPIENT_EMAIL      VARCHAR(100)         null,
    ITEM_TYPE            VARCHAR(20)          null,
-   WEIGHT               INT4                 null,
+   WEIGHT               INT4                 null, -- (>=1)
    DIMENSIONS           VARCHAR(50)          null,
-   STATUS               VARCHAR(20)          null,
-   PRIORITY             VARCHAR(20)          null,
+   STATUS               VARCHAR(20)          null, -- 'registered' || 'ready' || 'pending' || 'in_transit' || 'completed' || 'cancelled'
+   PRIORITY             VARCHAR(20)          null, -- 'normal' || 'urgent'
    IN_TRANSITION        BOOL                 null,
    DELIVERY_DATE        TIMESTAMPTZ          null,
    CREATED_AT           TIMESTAMPTZ          null,
    UPDATED_AT           TIMESTAMPTZ          null,
-   constraint PK_DELIVERY primary key (ID)
+   constraint PK_DELIVERY primary key (ID),
+   constraint CHK_DELIVERY_WEIGHT CHECK (WEIGHT >= 1),
+   constraint CHK_DELIVERY_STATUS CHECK (STATUS IN ('registered', 'ready', 'pending', 'in_transit', 'completed', 'cancelled')),
+   constraint CHK_DELIVERY_PRIORITY CHECK (PRIORITY IN ('normal', 'urgent'))
 );
 
 create index DELIVERS_FK on DELIVERY (DRIVER_ID);
@@ -233,10 +249,11 @@ create table DELIVERY_TRACKING (
    STAFF_ID             INT4                 null,
    WAR_ID               INT4                 null,
    DEL_ID               INT4                 not null,
-   STATUS               VARCHAR(20)          null,
+   STATUS               VARCHAR(20)          null, -- 'registered' || 'ready' || 'pending' || 'in_transit' || 'completed' || 'cancelled'
    NOTES                TEXT                 null,
    CREATED_AT           TIMESTAMPTZ          null,
-   constraint PK_DELIVERY_TRACKING primary key (ID)
+   constraint PK_DELIVERY_TRACKING primary key (ID),
+   constraint CHK_TRACKING_STATUS CHECK (STATUS IN ('registered', 'ready', 'pending', 'in_transit', 'completed', 'cancelled'))
 );
 
 create index LOGS_FK on DELIVERY_TRACKING (DEL_ID);
@@ -247,6 +264,10 @@ create index RECORDS_LOGS_FK on DELIVERY_TRACKING (WAR_ID);
 /*==============================================================*/
 /* Foreign Key Constraints (R1-R20)                             */
 /*==============================================================*/
+
+-- CHK: User.role (Django-managed table, applied via ALTER)
+alter table "USER" add constraint CHK_USER_ROLE
+   CHECK (role IN ('admin', 'client', 'driver', 'staff', 'manager'));
 
 -- R1: User -> Client (UserInheritance)
 alter table CLIENT add constraint FK_CLIENT_INHERITS_USER
