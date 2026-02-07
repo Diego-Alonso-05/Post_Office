@@ -34,9 +34,10 @@ class User(AbstractUser):
         max_length=16,
         choices=[
             ("admin", "Admin"),
-            ("manager", "Manager"),
             ("client", "Client"),
-            ("employee", "Employee"),
+            ("driver", "Driver"),
+            ("staff", "Staff"),
+            ("manager", "Manager"),
         ],
         default="client",
     )
