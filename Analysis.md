@@ -23,7 +23,7 @@ This document clarifies which functionalities remain with Django ORM and which m
 - Form rendering
 - CSRF protection
 - Django Admin (if used)
-- Migrations (schema only)
+- Migrations (schema only — creates `"USER"` table)
 
 ---
 ### What MOVES to Database Objects:
@@ -75,22 +75,24 @@ These functionalities remain unchanged because they are Django framework interna
 | Client-side validation | UX improvement, DB validates again              |
 | Form field definitions | Define what fields exist, not how they're saved |
 
-**What changes:** Forms no longer call `.save()`. Instead, cleaned data is passed to stored procedures.
+**What changes:** Forms no longer call `.save()`. Instead, cleaned data is passed to stored procedures via `connection.cursor()`.
 
 ### 1.4 Migrations (Schema Only)
 
 | Functionality          | Why Keep                                        |
 |------------------------|-------------------------------------------------|
-| `makemigrations`       | Generates schema changes                        |
-| `migrate`              | Applies schema to database                      |
+| `makemigrations`       | Generates schema for `"USER"` table only        |
+| `migrate`              | Creates `"USER"` + Django auth tables in DB     |
 
-**Note:** Models remain as schema definitions. Business logic moves out of `save()` methods.
+**Note:** Only `models.py` defines `User(AbstractUser)` with `db_table = '"USER"'`. All other tables (client, employee, warehouse, vehicle, invoice, route, delivery, etc.) are created by `DDL.sql` — not by Django migrations.
 
 ---
 
 ## PART 2: MOVES TO DATABASE OBJECTS
 
 These functionalities move from Python/Django to PostgreSQL stored procedures, functions, triggers, and views.
+
+> **Table/column naming convention:** All DDL.sql tables use unquoted names (lowercase in PostgreSQL catalog) except `"USER"` which is quoted. Inheritance uses **shared PK** (`child.id = parent.id`), not separate FK columns.
 
 ### 2.1 User Management
 
@@ -102,6 +104,10 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | List all clients       | `User.objects.filter(role="client")` | `SELECT * FROM v_clients` | View      |
 | List potential employees | `User.objects.exclude(role__in=[...])` | `SELECT * FROM v_potential_employees` | View |
 
+**Tables involved:** `"USER"`, `client`
+**Key columns:** `"USER"`.id, username, email, password, first_name, last_name, contact, address, role, is_superuser, is_staff, is_active, last_login, created_at, updated_at · `client`.id (= `"USER"`.id), tax_id
+**Role values (DDL.sql CHK_USER_ROLE):** admin, client, driver, staff, manager — **NOTE:** models.py choices list `employee` instead of `driver`/`staff`; the DDL CHECK constraint is the enforced source of truth
+
 ### 2.2 Employee Management
 
 | Operation              | Old (ORM)                          | New (DB Object)               | Type      |
@@ -112,6 +118,10 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | List employees         | `Employee.objects.select_related()`| `SELECT * FROM v_employees_full` | View   |
 | Sync user role         | `Employee.save()` Python method    | `trg_employee_sync_user_role` | Trigger   |
 | Validate license       | `EmployeeDriverForm.clean()`       | `fn_is_license_valid()`       | Function  |
+
+**Tables involved:** `"USER"`, `employee`, `employee_driver`, `employee_staff`
+**Inheritance:** `employee`.id = `"USER"`.id, `employee_driver`.id = `employee`.id, `employee_staff`.id = `employee`.id (shared PK)
+**Key columns:** `employee`.war_id→warehouse, emp_position ('driver'|'staff'), schedule, wage, is_active, hire_date · `employee_driver`.license_number, license_category (A|B|C|D), license_expiry_date, driving_experience_years, driver_status · `employee_staff`.department
 
 ### 2.3 Delivery Management
 
@@ -134,6 +144,12 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | Tracking by number     | None                               | `fn_get_delivery_tracking(tracking_number)` | Function |
 | Update delivery status | `delivery.save()` (no history)     | `CALL sp_update_delivery_status()` | Procedure |
 
+**Tables involved:** `delivery`, `delivery_tracking`
+**Key FKs:** `delivery`.driver_id→employee_driver, route_id→route, inv_id→invoice, client_id→client, war_id→warehouse
+**Key columns:** tracking_number, sender_name/address/phone/email, recipient_name/address/phone/email, item_type, weight (>=1), dimensions, status, priority, in_transition, delivery_date
+**Delivery statuses:** registered, ready, pending, in_transit, completed, cancelled
+**Tracking:** `delivery_tracking`.del_id→delivery, staff_id→employee_staff, war_id→warehouse, status, notes, created_at (append-only event log)
+
 ### 2.4 Route Management
 
 | Operation              | Old (ORM)                          | New (DB Object)               | Type      |
@@ -146,6 +162,12 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | Export to JSON         | `Route.objects.all().values()`     | `SELECT * FROM v_routes_export` | View    |
 | Export to CSV          | `export_routes_csv()` (exists)     | Keep existing                 | Procedure |
 | Time validation        | Form `clean()` only                | `trg_route_time_check`        | Trigger   |
+
+**Tables involved:** `route`
+**Key FKs:** `route`.driver_id→employee_driver, vehicle_id→vehicle, war_id→warehouse
+**Key columns:** description, delivery_status, delivery_date, delivery_start_time (TIMESTAMPTZ), delivery_end_time (TIMESTAMPTZ), expected_duration (TIME), kms_travelled, driver_notes, is_active
+**Route statuses:** not_started, on_going, finished, cancelled
+**Validation:** trg_route_time_check ensures delivery_end_time > delivery_start_time
 
 ### 2.5 Vehicle Management
 
@@ -160,6 +182,10 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | Export to CSV          | `export_vehicles_csv()` (exists)   | Keep existing                 | Procedure |
 | Year validation        | Form `clean()` only                | `fn_is_valid_year()`          | Function  |
 
+**Tables involved:** `vehicle`
+**Key columns:** vehicle_type (van|truck|motorcycle|bicycle|car), plate_number, capacity, brand, model, vehicle_status (available|in_use|maintenance|out_of_service), year, fuel_type (diesel|petrol|electric|hybrid), last_maintenance_date, is_active
+**Validation:** fn_is_valid_year checks 1900 <= year <= 2100; sp_delete_vehicle blocks if active routes exist
+
 ### 2.6 Warehouse Management
 
 | Operation              | Old (ORM)                          | New (DB Object)               | Type      |
@@ -172,6 +198,10 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | Export to JSON         | `Warehouse.objects.all().values()` | `SELECT * FROM v_warehouses_export` | View |
 | Export to CSV          | `export_warehouses_csv()` (exists) | Keep existing                 | Procedure |
 | Schedule validation    | Form `clean()` only                | `trg_warehouse_schedule_check`| Trigger   |
+
+**Tables involved:** `warehouse`
+**Key columns:** name, contact, address, schedule_open (TIME), schedule_close (TIME), schedule, maximum_storage_capacity (>=1), is_active
+**Validation:** trg_warehouse_schedule_check ensures schedule_close > schedule_open
 
 ### 2.7 Invoice Management
 
@@ -192,6 +222,13 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 | Calculate subtotal     | Python loop in view                | `fn_invoice_subtotal(id)`     | Function  |
 | Calculate tax          | `subtotal * 0.23` hardcoded        | `fn_calculate_tax(amt, rate)` | Function  |
 | Calculate total        | Python in view                     | `fn_invoice_total(id)`        | Function  |
+
+**Tables involved:** `invoice`, `invoice_item`
+**Invoice FKs:** war_id→warehouse, staff_id→employee_staff, client_id→client
+**Invoice key columns:** status (pending|completed|cancelled|refunded), type (paid_on_send|paid_on_delivery), quantity, cost, paid, pay_method (cash|card|mobile_payment|account), name, address, contact (snapshot fields)
+**Invoice item key columns:** inv_id→invoice, shipment_type, weight, delivery_speed, quantity, unit_price, total_item_cost (trigger-calculated), notes
+**Triggers:** trg_invoice_item_calc_total (BEFORE INSERT/UPDATE → total_item_cost = quantity * unit_price), trg_invoice_update_cost (AFTER INSERT/UPDATE/DELETE on invoice_item → recalculates invoice.cost), trg_invoice_soft_delete (BEFORE DELETE → sets status='cancelled')
+**Tax rate:** 23% (configurable via fn_calculate_tax)
 
 ### 2.8 Dashboard & Aggregations
 
@@ -224,15 +261,15 @@ These functionalities move from Python/Django to PostgreSQL stored procedures, f
 ### Before (ORM):
 ```python
 def deliveries_create(request):
-rn redirect("deliveries_list")
-    else:
-        form = DeliveryForm()
-    return render(request, "deliveries/form.html", {"form": form})
-```    if request.method == "POST":
+    if request.method == "POST":
         form = DeliveryForm(request.POST)
         if form.is_valid():
             delivery = form.save()  # ORM handles everything
-            retu
+            return redirect("deliveries_list")
+    else:
+        form = DeliveryForm()
+    return render(request, "deliveries/form.html", {"form": form})
+```
 
 ### After (DB Objects):
 ```python
@@ -287,7 +324,7 @@ def deliveries_list(request):
 | `views/auth_views.py`       | Authentication stays ORM-based        |
 | `views/decorators.py`       | Role check reads from session         |
 | `forms.py`                  | Form definitions stay, `.save()` removed |
-| `models.py`                 | Schema definitions stay, `save()` methods removed |
+| `models.py`                 | Only `User(AbstractUser)` — schema definition for `"USER"` table; `save()` methods removed |
 | `templates/*`               | No changes needed                     |
 | `urls.py`                   | No changes needed                     |
 
@@ -381,10 +418,6 @@ PostOffice_Proj/
 ```
 
 ---
-
-
-
-
 
 
 
