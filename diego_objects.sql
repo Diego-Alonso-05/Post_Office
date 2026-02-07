@@ -194,6 +194,23 @@ ORDER BY w.id;
 
 
 
+-- 7. v_users_admin  [User]
+-- Simplified administrative view of system users.
+-- Exposes core identification and status fields for admin dashboards
+-- and user management pages (read-only).
+CREATE OR REPLACE VIEW v_users_admin AS
+SELECT
+    id,
+    username,
+    email,
+    role,
+    is_active,
+    created_at
+FROM "USER"
+ORDER BY username;
+
+
+
 /* ============================================================ */
 /*                       T R I G G E R S                        */
 /* ============================================================ */

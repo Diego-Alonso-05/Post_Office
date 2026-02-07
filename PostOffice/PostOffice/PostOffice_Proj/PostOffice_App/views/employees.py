@@ -13,6 +13,11 @@
 # from .decorators import role_required
 # from django.contrib.auth.decorators import login_required
 # from django.core.paginator import Paginator
+from django.db import connection
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+
+from .decorators import role_required
 
 
 # @login_required
@@ -23,6 +28,31 @@
 #     page_number = request.GET.get("page")
 #     employees_page = paginator.get_page(page_number)
 #     return render(request, "core/employees_list.html", {"employees": employees_page})
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def employees_list(request):
+    """
+    Admin / Manager list of all employees.
+    Data is read from SQL VIEW v_employees_full.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT *
+            FROM v_employees_full
+            ORDER BY full_name
+        """)
+        columns = [col[0] for col in cursor.description]
+        employees = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    return render(
+        request,
+        "core/employees_list.html",
+        {"employees": employees},
+    )
 
 
 # @login_required
@@ -111,3 +141,127 @@
 #             "employee": employee,
 #         },
 #     )
+
+
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def employees_form(request, employee_id=None):
+    """
+    Create or edit an employee (driver or staff).
+    - CREATE  -> sp_create_employee
+    - UPDATE  -> sp_update_employee
+    All business logic is enforced at DB level.
+    """
+
+    is_edit = employee_id is not None
+
+    if request.method == "POST":
+        data = request.POST
+
+        with connection.cursor() as cursor:
+            if is_edit:
+                # =========================
+                # UPDATE EXISTING EMPLOYEE
+                # =========================
+                cursor.execute(
+                    """
+                    CALL sp_update_employee(
+                        %s,  -- employee id
+
+                        -- USER fields
+                        %s, %s, %s, %s, %s,
+
+                        -- EMPLOYEE fields
+                        %s, %s, %s, %s, %s,
+
+                        -- DRIVER fields
+                        %s, %s, %s, %s, %s,
+
+                        -- STAFF fields
+                        %s
+                    )
+                    """,
+                    [
+                        employee_id,
+
+                        # USER
+                        data.get("email"),
+                        data.get("first_name"),
+                        data.get("last_name"),
+                        data.get("contact"),
+                        data.get("address"),
+
+                        # EMPLOYEE
+                        data.get("war_id"),
+                        data.get("emp_position"),      # driver / staff
+                        data.get("schedule"),
+                        data.get("wage"),
+                        data.get("is_active") == "on",
+
+                        # DRIVER
+                        data.get("license_number"),
+                        data.get("license_category"),
+                        data.get("license_expiry"),
+                        data.get("driving_experience"),
+                        data.get("driver_status"),
+
+                        # STAFF
+                        data.get("department"),
+                    ],
+                )
+
+            else:
+                # =========================
+                # CREATE NEW EMPLOYEE
+                # =========================
+                cursor.execute(
+                    """
+                    CALL sp_create_employee(
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s
+                    )
+                    """,
+                    [
+                        # USER
+                        data["username"],
+                        data["email"],
+                        data["password"],          # hashed before or academic
+                        data.get("first_name"),
+                        data.get("last_name"),
+                        data.get("contact"),
+                        data.get("address"),
+
+                        # EMPLOYEE
+                        data["war_id"],
+                        data["emp_position"],      # driver / staff
+                        data.get("schedule"),
+                        data.get("wage"),
+                        data.get("hire_date"),
+
+                        # DRIVER
+                        data.get("license_number"),
+                        data.get("license_category"),
+                        data.get("license_expiry"),
+                        data.get("driving_experience"),
+                        data.get("driver_status"),
+
+                        # STAFF
+                        data.get("department"),
+                    ],
+                )
+
+        return redirect("employees_list")
+
+    return render(
+        request,
+        "employees/employees_form.html",
+        {
+            "is_edit": is_edit,
+            "employee_id": employee_id,
+        },
+    )

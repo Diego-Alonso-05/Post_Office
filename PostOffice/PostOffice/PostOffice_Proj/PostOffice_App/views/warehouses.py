@@ -1,3 +1,15 @@
+import json
+
+from django.db import connection
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+
+from .decorators import role_required
+
+
+
+
 # # ==========================================================
 # #  WAREHOUSES
 # # ==========================================================
@@ -29,6 +41,29 @@
 #     return render(request, "warehouses/list.html", {"warehouses": warehouses_page})
 
 
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_list(request):
+    """
+    List of warehouses using SQL view v_warehouses_full.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT *
+            FROM v_warehouses_full
+            ORDER BY name
+        """)
+        columns = [col[0] for col in cursor.description]
+        warehouses = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    return render(
+        request,
+        "warehouses/list.html",
+        {"warehouses": warehouses},
+    )
+
+
 # @login_required
 # @role_required(["admin"])
 # def warehouses_create(request):
@@ -52,6 +87,48 @@
 #         form = WarehouseForm()
 #     return render(request, "warehouses/create.html", {"form": form})
 
+
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_create(request):
+    """
+    Create a new warehouse using sp_create_warehouse.
+    All validations are enforced at DB level.
+    """
+
+    if request.method == "POST":
+        data = request.POST
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CALL sp_create_warehouse(
+                    %s,  -- name
+                    %s,  -- contact
+                    %s,  -- address
+                    %s,  -- maximum_storage_capacity
+                    %s,  -- schedule_open
+                    %s,  -- schedule_close
+                    %s   -- schedule
+                )
+                """,
+                [
+                    data["name"],
+                    data["contact"],
+                    data["address"],
+                    data["maximum_storage_capacity"],
+                    data.get("schedule_open"),
+                    data.get("schedule_close"),
+                    data.get("schedule"),
+                ],
+            )
+
+        return redirect("warehouses_list")
+
+    return render(
+        request,
+        "warehouses/create.html",
+    )
 
 # @login_required
 # @role_required(["admin", "staff"])
@@ -83,6 +160,53 @@
 #     )
 
 
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_edit(request, warehouse_id):
+    """
+    Edit an existing warehouse using sp_update_warehouse.
+    All validations are enforced at DB level.
+    """
+
+    if request.method == "POST":
+        data = request.POST
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CALL sp_update_warehouse(
+                    %s,  -- id
+                    %s,  -- name
+                    %s,  -- contact
+                    %s,  -- address
+                    %s,  -- schedule_open
+                    %s,  -- schedule_close
+                    %s,  -- schedule
+                    %s,  -- maximum_storage_capacity
+                    %s   -- is_active
+                )
+                """,
+                [
+                    warehouse_id,
+                    data.get("name"),
+                    data.get("contact"),
+                    data.get("address"),
+                    data.get("schedule_open"),
+                    data.get("schedule_close"),
+                    data.get("schedule"),
+                    data.get("maximum_storage_capacity"),
+                    data.get("is_active") == "on",
+                ],
+            )
+
+        return redirect("warehouses_list")
+
+    return render(
+        request,
+        "warehouses/edit.html",
+        {"warehouse_id": warehouse_id},
+    )
+
 # @login_required
 # @role_required(["admin"])
 # def warehouses_delete(request, warehouse_id):
@@ -110,6 +234,28 @@
 #         messages.error(request, "An error occurred while deleting the warehouse.")
 
 #     return redirect("warehouses_list")
+
+
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_delete(request, warehouse_id):
+    """
+    Delete a warehouse using sp_delete_warehouse.
+    Deletion rules are enforced at DB level.
+    """
+
+    if request.method != "POST":
+        return HttpResponseBadRequest("Invalid request method.")
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CALL sp_delete_warehouse(%s)
+            """,
+            [warehouse_id],
+        )
+
+    return redirect("warehouses_list")
 
 
 # # ==========================================================
@@ -154,6 +300,35 @@
 #     )
 
 #     return response
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_export_json(request):
+    """
+    Export warehouses to JSON using v_warehouses_export view.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT *
+            FROM v_warehouses_export
+            ORDER BY id
+        """)
+        columns = [col[0] for col in cursor.description]
+        warehouses = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    json_data = json.dumps(warehouses, default=str, indent=4)
+
+    response = HttpResponse(
+        json_data,
+        content_type="application/json"
+    )
+    response["Content-Disposition"] = 'attachment; filename="warehouses_export.json"'
+
+    return response
+
 
 
 # @login_required
@@ -248,6 +423,66 @@
 
 #     return render(request, "warehouses/import.html", {"form": form})
 
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_import_json(request):
+    """
+    Import warehouses from a JSON file using sp_create_warehouse.
+    All validation and constraints are enforced at DB level.
+    """
+
+    if request.method != "POST":
+        return render(request, "warehouses/import.html")
+
+    file = request.FILES.get("file")
+    if not file:
+        return HttpResponseBadRequest("No file uploaded.")
+
+    try:
+        data = json.load(file)
+    except Exception:
+        return HttpResponseBadRequest("Invalid JSON file.")
+
+    if not isinstance(data, list):
+        return HttpResponseBadRequest("JSON must contain a list of warehouses.")
+
+    created_count = 0
+
+    with connection.cursor() as cursor:
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+
+            try:
+                cursor.execute(
+                    """
+                    CALL sp_create_warehouse(
+                        %s,  -- name
+                        %s,  -- contact
+                        %s,  -- address
+                        %s,  -- maximum_storage_capacity
+                        %s,  -- schedule_open
+                        %s,  -- schedule_close
+                        %s   -- schedule
+                    )
+                    """,
+                    [
+                        item.get("name"),
+                        item.get("contact"),
+                        item.get("address"),
+                        item.get("maximum_storage_capacity"),
+                        item.get("schedule_open"),
+                        item.get("schedule_close"),
+                        item.get("schedule"),
+                    ],
+                )
+                created_count += 1
+            except Exception:
+                # Skip invalid rows, DB decides what is valid
+                continue
+
+    return redirect("warehouses_list")
+
 
 # # ==========================================================
 # # EXPORT CSV
@@ -276,3 +511,35 @@
 #     )
 
 #     return response
+
+
+
+
+@login_required
+@role_required(["admin", "manager"])
+def warehouses_export_csv(request):
+    """
+    Export warehouses to CSV using export_warehouses_csv() SQL function.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM export_warehouses_csv();")
+        rows = cursor.fetchall()
+
+    header = (
+        "id,"
+        "name,"
+        "address,"
+        "contact,"
+        "schedule_open,"
+        "schedule_close,"
+        "maximum_storage_capacity\n"
+    )
+
+    csv_body = "\n".join(row[0] for row in rows)
+    csv_data = header + csv_body
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="warehouses_export.csv"'
+
+    return response
