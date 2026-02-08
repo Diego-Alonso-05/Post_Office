@@ -494,24 +494,30 @@ def deliveries_tracking(request, tracking_number):
         )
         tracking = dictfetchall(cursor)
 
-    if not tracking:
-        messages.error(request, "No tracking events found for this tracking number.")
-        return render(
-            request,
-            "deliveries/tracking.html",
-            {"tracking_number": tracking_number, "tracking": []},
-        )
+    # 2) delivery_id from tracking events, or look up delivery directly
+    if tracking:
+        delivery_id = tracking[0].get("delivery_id")
+    else:
+        delivery_id = None
 
-    # 2) delivery_id (tracking_number debería ser único, pero por seguridad lo sacamos del primer evento)
-    delivery_id = tracking[0].get("delivery_id")
-
-    # 3) Info “bonita” del delivery (v_deliveries_full)
+    # 3) Info "bonita" del delivery (v_deliveries_full)
     delivery = None
     if delivery_id is not None:
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM v_deliveries_full WHERE id = %s;", [delivery_id])
             rows = dictfetchall(cursor)
         delivery = rows[0] if rows else None
+    else:
+        # No tracking events — try to find the delivery by tracking_number directly
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM v_deliveries_full WHERE tracking_number = %s;", [tracking_number])
+            rows = dictfetchall(cursor)
+        if rows:
+            delivery = rows[0]
+            delivery_id = delivery["id"]
+
+    if not tracking:
+        messages.error(request, "No tracking events found for this tracking number.")
 
     # 4) Render
     return render(
@@ -520,7 +526,7 @@ def deliveries_tracking(request, tracking_number):
         {
             "tracking_number": tracking_number,
             "delivery_id": delivery_id,
-            "delivery": delivery,
-            "tracking": tracking,  # ya viene ordenado
+            "delivery": delivery or {},
+            "tracking": tracking,
         },
     )
