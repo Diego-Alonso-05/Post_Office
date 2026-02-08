@@ -9,6 +9,8 @@ dist/
 build/
 *.pyc
 
+rodrigo_objects.md
+
 # Virtual Environment
 venv/
 env/

@@ -40,22 +40,22 @@
           <td>{{ r.description }}</td>
           <td>{{ r.delivery_status }}</td>
           <td class="muted">
-            {% if r.vehicle %}
-              {{ r.vehicle.plate_number }}
+            {% if r.plate_number %}
+              {{ r.plate_number }}
             {% else %}
               -
             {% endif %}
           </td>
           <td class="muted">
-            {% if r.driver %}
-              {{ r.driver.user.full_name }}
+            {% if r.driver_name %}
+              {{ r.driver_name }}
             {% else %}
               -
             {% endif %}
           </td>
           <td class="muted">
-            {% if r.warehouse %}
-              {{ r.warehouse.name }}
+            {% if r.warehouse_name %}
+              {{ r.warehouse_name }}
             {% else %}
               -
             {% endif %}

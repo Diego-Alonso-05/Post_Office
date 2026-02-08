@@ -2,10 +2,9 @@
 #  AUTH VIEWS (login / register / logout)
 # ==========================================================
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from ..forms import CustomUserCreationForm
-
 
 
 def login_view(request):
@@ -16,7 +15,8 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             auth_login(request, user)
-            request.session["role"] = user.role
+            # Guardamos el rol en sesión (clave para los templates)
+            request.session["role"] = getattr(user, "role", None)
             return redirect("dashboard")
         else:
             messages.error(request, "Invalid username or password")
@@ -26,12 +26,13 @@ def login_view(request):
 
 def register_view(request):
     if request.method == "POST":
-        form = CustomUserCreationForm(request.POST)
+        form = UserCreationForm(request.POST)
         if form.is_valid():
             form.save()
             return redirect("login")
     else:
-        form = CustomUserCreationForm()
+        form = UserCreationForm()
+
     return render(request, "auth/register.html", {"form": form})
 
 

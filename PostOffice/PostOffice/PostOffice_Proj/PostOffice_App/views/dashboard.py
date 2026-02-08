@@ -1,37 +1,27 @@
-# # ==========================================================
-# #  DASHBOARD
-# # ==========================================================
-# from django.contrib.auth.decorators import login_required
-# from django.shortcuts import render
-# from ..models import (
-#     User,
-#     Employee,
-#     Vehicle,
-#     Invoice,
-#     Route,
-#     Delivery,
-# )
+# ==========================================================
+#  DASHBOARD — No ORM, uses DB objects only
+# ==========================================================
+#
+#  All stats come from fn_get_dashboard_stats(p_user_id, p_role)
+#  which reads from mv_dashboard_stats (materialized view) for
+#  admin/manager, or counts directly from delivery for other roles.
+
+from django.db import connection
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
 
 
-# @login_required
-# def dashboard(request):
-#     role = request.user.role
+@login_required
+def dashboard(request):
+    role = request.user.role
 
-#     if role == "admin":
-#         stats = {
-#             "total_vehicles": Vehicle.objects.count(),
-#             "total_deliveries": Delivery.objects.count(),
-#             "total_clients": User.objects.filter(role="client").count(),
-#             "total_employees": Employee.objects.count(),
-#             "active_routes": Route.objects.exclude(delivery_status__in=["Completed", "Cancelled"]).count(),
-#             "pending_deliveries": Delivery.objects.filter(status="Pending").count(),
-#             "total_invoices": Invoice.objects.count(),
-#         }
-#     elif role == "driver":
-#         employee = getattr(request.user, "employee", None)
-#         my_deliveries = Delivery.objects.filter(driver=employee) if employee else Delivery.objects.none()
-#         stats = {"my_deliveries": my_deliveries}
-#     else:  # client, staff, manager
-#         stats = {"my_deliveries": Delivery.objects.filter(client=request.user)}
+    # SELECT * FROM fn_get_dashboard_stats(user_id, role)
+    # Returns TABLE(stat_name TEXT, stat_value BIGINT)
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM fn_get_dashboard_stats(%s, %s)",
+            [request.user.id, role],
+        )
+        stats = {row[0]: row[1] for row in cur.fetchall()}
 
-#     return render(request, "dashboard/admin.html", {"stats": stats, "role": role})
+    return render(request, "dashboard/admin.html", {"stats": stats, "role": role})

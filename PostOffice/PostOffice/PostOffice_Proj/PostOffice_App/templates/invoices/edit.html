@@ -2,7 +2,7 @@
 {% block title %}Edit Invoice — Mailly{% endblock %}
 {% block content %}
 <div class="card">
-  <h3>Edit Invoice #{{ invoice.id_invoice }}</h3>
+  <h3>Edit Invoice #{{ invoice.id }}</h3>
   <form method="post">
   {% csrf_token %}
   {{ form.as_p }}

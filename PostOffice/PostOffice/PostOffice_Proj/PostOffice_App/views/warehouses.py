@@ -5,10 +5,9 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from ..forms import WarehouseForm
+from ..notifications import create_notification
 
 from .decorators import role_required
-
-
 
 
 # # ==========================================================
@@ -92,12 +91,6 @@ def warehouses_list(request):
 @login_required
 @role_required(["admin", "manager"])
 def warehouses_create(request):
-    """
-    Create a new warehouse using sp_create_warehouse.
-    Django forms are used ONLY for validation.
-    All persistence is handled by PostgreSQL procedures.
-    """
-
     if request.method == "POST":
         form = WarehouseForm(request.POST)
 
@@ -108,13 +101,7 @@ def warehouses_create(request):
                 cursor.execute(
                     """
                     CALL sp_create_warehouse(
-                        %s,  -- name
-                        %s,  -- contact
-                        %s,  -- address
-                        %s,  -- maximum_storage_capacity
-                        %s,  -- schedule_open
-                        %s,  -- schedule_close
-                        %s   -- schedule
+                        %s, %s, %s, %s, %s, %s, %s
                     )
                     """,
                     [
@@ -128,18 +115,21 @@ def warehouses_create(request):
                     ],
                 )
 
+            create_notification(
+                notification_type="warehouse_created",
+                recipient_contact=request.user.email,
+                subject="Warehouse created",
+                message=f"Warehouse '{cd['name']}' was created successfully.",
+                status="sent",
+            )
+
             return redirect("warehouses_list")
 
     else:
         form = WarehouseForm()
 
-    return render(
-        request,
-        "warehouses/create.html",
-        {
-            "form": form,
-        },
-    )
+    return render(request, "warehouses/create.html", {"form": form})
+
 # @login_required
 # @role_required(["admin", "staff"])
 # def warehouses_edit(request, warehouse_id):
@@ -179,6 +169,16 @@ def warehouses_edit(request, warehouse_id):
     Persistence is handled by PostgreSQL stored procedure.
     """
 
+    # Obtener nombre ANTES de editar (para la notificación)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT name FROM v_warehouses_full WHERE id = %s",
+            [warehouse_id],
+        )
+        row = cursor.fetchone()
+
+    old_name = row[0] if row else f"ID {warehouse_id}"
+
     if request.method == "POST":
         form = WarehouseForm(request.POST)
 
@@ -189,15 +189,15 @@ def warehouses_edit(request, warehouse_id):
                 cursor.execute(
                     """
                     CALL sp_update_warehouse(
-                        %s,  -- id
-                        %s,  -- name
-                        %s,  -- contact
-                        %s,  -- address
-                        %s,  -- schedule_open
-                        %s,  -- schedule_close
-                        %s,  -- schedule
-                        %s,  -- maximum_storage_capacity
-                        %s   -- is_active
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s
                     )
                     """,
                     [
@@ -207,11 +207,23 @@ def warehouses_edit(request, warehouse_id):
                         cd["address"],
                         cd["po_schedule_open"],
                         cd["po_schedule_close"],
-                        None,  # schedule (optional / derived)
+                        None,  # schedule (derived)
                         cd["maximum_storage_capacity"],
                         cd.get("is_active", True),
                     ],
                 )
+
+            create_notification(
+                notification_type="warehouse_updated",
+                recipient_contact=request.user.email,
+                subject="Warehouse updated",
+                message=(
+                    f"Warehouse '{old_name}' was updated."
+                    if cd["name"] == old_name
+                    else f"Warehouse '{old_name}' was renamed to '{cd['name']}'."
+                ),
+                status="sent",
+            )
 
             return redirect("warehouses_list")
 
@@ -226,6 +238,7 @@ def warehouses_edit(request, warehouse_id):
             "warehouse_id": warehouse_id,
         },
     )
+
 # @login_required
 # @role_required(["admin"])
 # def warehouses_delete(request, warehouse_id):
@@ -258,21 +271,33 @@ def warehouses_edit(request, warehouse_id):
 @login_required
 @role_required(["admin", "manager"])
 def warehouses_delete(request, warehouse_id):
-    """
-    Delete a warehouse using sp_delete_warehouse.
-    Deletion rules are enforced at DB level.
-    """
-
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method.")
 
+    # Obtener nombre ANTES de borrar
     with connection.cursor() as cursor:
         cursor.execute(
-            """
-            CALL sp_delete_warehouse(%s)
-            """,
+            "SELECT name FROM v_warehouses_full WHERE id = %s",
             [warehouse_id],
         )
+        row = cursor.fetchone()
+
+    warehouse_name = row[0] if row else f"ID {warehouse_id}"
+
+    # Borrado real
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "CALL sp_delete_warehouse(%s)",
+            [warehouse_id],
+        )
+
+    create_notification(
+        notification_type="warehouse_deleted",
+        recipient_contact=request.user.email,
+        subject="Warehouse deleted",
+        message=f"Warehouse '{warehouse_name}' was deleted.",
+        status="sent",
+    )
 
     return redirect("warehouses_list")
 
@@ -466,10 +491,12 @@ def warehouses_import_json(request):
         return HttpResponseBadRequest("JSON must contain a list of warehouses.")
 
     created_count = 0
+    skipped_count = 0
 
     with connection.cursor() as cursor:
         for item in data:
             if not isinstance(item, dict):
+                skipped_count += 1
                 continue
 
             try:
@@ -497,8 +524,19 @@ def warehouses_import_json(request):
                 )
                 created_count += 1
             except Exception:
-                # Skip invalid rows, DB decides what is valid
+                skipped_count += 1
                 continue
+
+    create_notification(
+        notification_type="warehouses_imported",
+        recipient_contact=request.user.email,
+        subject="Warehouses imported",
+        message=(
+            f"Imported {created_count} warehouses from JSON."
+            + (f" Skipped {skipped_count} invalid entries." if skipped_count else "")
+        ),
+        status="sent",
+    )
 
     return redirect("warehouses_list")
 
@@ -558,7 +596,16 @@ def warehouses_export_csv(request):
     csv_body = "\n".join(row[0] for row in rows)
     csv_data = header + csv_body
 
+    create_notification(
+        notification_type="warehouses_exported_csv",
+        recipient_contact=request.user.email,
+        subject="Warehouses exported (CSV)",
+        message=f"Successfully exported {len(rows)} warehouses to CSV.",
+        status="sent",
+    )
+
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="warehouses_export.csv"'
 
     return response
+

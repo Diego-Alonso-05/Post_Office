@@ -14,40 +14,40 @@
 /*--------------------------------------------------------------*/
 /*  #  | Entity      | Type              | Name                 */
 /*-----|-------------|-------------------|---------------------- */
-/*  1  | Invoice     | Function          | fn_calculate_tax     */
-/*  2  | InvoiceItem | Function          | fn_calculate_item_total */
-/*  3  | Invoice     | Function          | fn_invoice_subtotal  */
-/*  4  | Invoice     | Function          | fn_invoice_total     */
-/*  5  | Vehicle     | Function          | fn_is_valid_year     */
-/*  6  | Invoice     | View              | v_invoices_with_items*/
-/*  7  | Invoice     | View              | v_invoices_export    */
-/*  8  | Vehicle     | View              | v_vehicles_full      */
-/*  9  | Vehicle     | View              | v_vehicles_export    */
-/* 10  | Route       | View              | v_routes_full        */
-/* 11  | Route       | View              | v_routes_export      */
-/* 12  | Invoice     | Materialized View | mv_invoice_totals    */
-/* 13  | Dashboard   | Materialized View | mv_dashboard_stats   */
-/* 14  | Dashboard   | Function          | fn_get_dashboard_stats*/
-/* 15  | InvoiceItem | Trigger           | trg_invoice_item_calc_total */
-/* 16  | InvoiceItem | Trigger           | trg_invoice_update_cost */
-/* 17  | Invoice     | Trigger           | trg_invoice_soft_delete */
-/* 18  | Route       | Trigger           | trg_route_time_check */
-/* 19  | Invoice     | Procedure         | sp_create_invoice    */
-/* 20  | Invoice     | Procedure         | sp_update_invoice    */
-/* 21  | Invoice     | Procedure         | sp_delete_invoice    */
-/* 22  | Invoice     | Procedure         | sp_import_invoices   */
-/* 23  | InvoiceItem | Procedure         | sp_add_invoice_item  */
-/* 24  | Vehicle     | Procedure         | sp_create_vehicle    */
-/* 25  | Vehicle     | Procedure         | sp_update_vehicle    */
-/* 26  | Vehicle     | Procedure         | sp_delete_vehicle    */
-/* 27  | Vehicle     | Procedure         | sp_import_vehicles   */
-/* 28  | Route       | Procedure         | sp_create_route      */
-/* 29  | Route       | Procedure         | sp_update_route      */
-/* 30  | Route       | Procedure         | sp_delete_route      */
-/* 31  | Route       | Procedure         | sp_import_routes     */
+/*  1  | Invoice     | Function          | fn_calculate_tax     */ -- X
+/*  2  | InvoiceItem | Function          | fn_calculate_item_total */ -- X
+/*  3  | Invoice     | Function          | fn_invoice_subtotal  */ -- X
+/*  4  | Invoice     | Function          | fn_invoice_total     */ -- X
+/*  5  | Vehicle     | Function          | fn_is_valid_year     */ -- X
+/*  6  | Invoice     | View              | v_invoices_with_items*/ -- X
+/*  7  | Invoice     | View              | v_invoices_export    */ -- X
+/*  8  | Vehicle     | View              | v_vehicles_full      */ -- X
+/*  9  | Vehicle     | View              | v_vehicles_export    */ -- X
+/* 10  | Route       | View              | v_routes_full        */ -- X
+/* 11  | Route       | View              | v_routes_export      */ -- X
+/* 12  | Invoice     | View              | v_invoice_totals     */ -- ?? MAYBE TO DELETE FROM FINAL SQL OBJECTS FILE ??
+/* 13  | Dashboard   | Materialized View | mv_dashboard_stats   */ -- X
+/* 14  | Dashboard   | Function          | fn_get_dashboard_stats*/ -- X
+/* 15  | InvoiceItem | Trigger           | trg_invoice_item_calc_total */ -- X
+/* 16  | InvoiceItem | Trigger           | trg_invoice_update_cost */ -- X
+/* 17  | Invoice     | Trigger           | trg_invoice_soft_delete */ -- X
+/* 18  | Route       | Trigger           | trg_route_time_check */ -- X
+/* 19  | Invoice     | Procedure         | sp_create_invoice    */ -- X
+/* 20  | Invoice     | Procedure         | sp_update_invoice    */ -- X
+/* 21  | Invoice     | Procedure         | sp_delete_invoice    */ -- X
+/* 22  | Invoice     | Procedure         | sp_import_invoices   */ -- X
+/* 23  | InvoiceItem | Procedure         | sp_add_invoice_item  */ -- X
+/* 24  | Vehicle     | Procedure         | sp_create_vehicle    */ -- X
+/* 25  | Vehicle     | Procedure         | sp_update_vehicle    */ -- X
+/* 26  | Vehicle     | Procedure         | sp_delete_vehicle    */ -- X
+/* 27  | Vehicle     | Procedure         | sp_import_vehicles   */ -- X
+/* 28  | Route       | Procedure         | sp_create_route      */ -- X
+/* 29  | Route       | Procedure         | sp_update_route      */ -- X
+/* 30  | Route       | Procedure         | sp_delete_route      */ -- X
+/* 31  | Route       | Procedure         | sp_import_routes     */ -- X
 /*==============================================================*/
 
-
+-- RODRIGO
 
 /* ============================================================ */
 /*                       F U N C T I O N S                      */
@@ -161,10 +161,7 @@ SELECT
     i.contact,
     i.created_at,
     i.updated_at,
-    COALESCE(agg.item_count, 0)                          AS item_count,
-    COALESCE(agg.subtotal, 0.00)                         AS subtotal,
-    ROUND(COALESCE(agg.subtotal, 0.00) * 0.23, 2)       AS tax,
-    ROUND(COALESCE(agg.subtotal, 0.00) * 1.23, 2)       AS total
+    COALESCE(agg.item_count, 0)              AS item_count
 FROM invoice i
 LEFT JOIN warehouse w           ON w.id = i.war_id
 LEFT JOIN employee_staff es     ON es.id = i.staff_id
@@ -172,9 +169,7 @@ LEFT JOIN "USER" u_staff        ON u_staff.id = es.id
 LEFT JOIN client c              ON c.id = i.client_id
 LEFT JOIN "USER" u_client       ON u_client.id = c.id
 LEFT JOIN LATERAL (
-    SELECT
-        COUNT(*)                AS item_count,
-        SUM(ii.total_item_cost) AS subtotal
+    SELECT COUNT(*) AS item_count
     FROM invoice_item ii
     WHERE ii.inv_id = i.id
 ) agg ON true
@@ -303,33 +298,26 @@ ORDER BY r.id;
 
 
 
-/* ============================================================ */
-/*               M A T E R I A L I Z E D   V I E W S           */
-/* ============================================================ */
-
-
--- 12. mv_invoice_totals
--- Cached per-invoice subtotal, tax (23%), and grand total.
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_invoice_totals AS
+-- 12. v_invoice_totals
+-- Per-invoice cost (already includes tax via trigger), item count, and total quantity.
+CREATE OR REPLACE VIEW v_invoice_totals AS
 SELECT
-    i.id                                                        AS invoice_id,
-    COALESCE(SUM(ii.total_item_cost), 0.00)                     AS subtotal,
-    ROUND(COALESCE(SUM(ii.total_item_cost), 0.00) * 0.23, 2)   AS tax,
-    ROUND(COALESCE(SUM(ii.total_item_cost), 0.00) * 1.23, 2)   AS total,
-    COUNT(ii.id)                                                AS item_count
+    i.id                                    AS invoice_id,
+    i.cost,
+    i.quantity,
+    COALESCE(agg.item_count, 0)             AS item_count
 FROM invoice i
-LEFT JOIN invoice_item ii ON ii.inv_id = i.id
-GROUP BY i.id
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS item_count
+    FROM invoice_item ii
+    WHERE ii.inv_id = i.id
+) agg ON true
 ORDER BY i.id;
 
--- Unique index required for REFRESH CONCURRENTLY
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_invoice_totals_pk
-    ON mv_invoice_totals (invoice_id);
 
-
--- 13. mv_dashboard_stats
+-- 13. v_dashboard_stats
 -- Cached aggregate counts for the admin dashboard.
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_dashboard_stats AS
+CREATE OR REPLACE VIEW v_dashboard_stats AS
 SELECT
     (SELECT COUNT(*) FROM vehicle WHERE is_active = true)                                   AS total_vehicles,
     (SELECT COUNT(*) FROM delivery)                                                         AS total_deliveries,
@@ -339,14 +327,9 @@ SELECT
     (SELECT COUNT(*) FROM delivery WHERE status = 'pending')                                AS pending_deliveries,
     (SELECT COUNT(*) FROM invoice)                                                          AS total_invoices;
 
--- Unique index (single-row view, use constant)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_dashboard_stats_pk
-    ON mv_dashboard_stats ((1));
-
-
 -- 14. fn_get_dashboard_stats
 -- Returns role-specific dashboard data as key-value pairs.
--- Depends on: mv_dashboard_stats
+-- Depends on: v_dashboard_stats
 CREATE OR REPLACE FUNCTION fn_get_dashboard_stats(
     p_user_id INT,
     p_role    VARCHAR(20)
@@ -360,19 +343,19 @@ AS $$
 BEGIN
     IF p_role IN ('admin', 'manager') THEN
         RETURN QUERY
-        SELECT 'total_vehicles'::TEXT,      ds.total_vehicles      FROM mv_dashboard_stats ds
+        SELECT 'total_vehicles'::TEXT,      ds.total_vehicles      FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'total_deliveries'::TEXT,    ds.total_deliveries    FROM mv_dashboard_stats ds
+        SELECT 'total_deliveries'::TEXT,    ds.total_deliveries    FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'total_clients'::TEXT,       ds.total_clients       FROM mv_dashboard_stats ds
+        SELECT 'total_clients'::TEXT,       ds.total_clients       FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'total_employees'::TEXT,     ds.total_employees     FROM mv_dashboard_stats ds
+        SELECT 'total_employees'::TEXT,     ds.total_employees     FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'active_routes'::TEXT,       ds.active_routes       FROM mv_dashboard_stats ds
+        SELECT 'active_routes'::TEXT,       ds.active_routes       FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'pending_deliveries'::TEXT,  ds.pending_deliveries  FROM mv_dashboard_stats ds
+        SELECT 'pending_deliveries'::TEXT,  ds.pending_deliveries  FROM v_dashboard_stats ds
         UNION ALL
-        SELECT 'total_invoices'::TEXT,      ds.total_invoices      FROM mv_dashboard_stats ds;
+        SELECT 'total_invoices'::TEXT,      ds.total_invoices      FROM v_dashboard_stats ds;
 
     ELSIF p_role = 'driver' THEN
         RETURN QUERY
@@ -408,7 +391,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    NEW.total_item_cost := COALESCE(NEW.quantity, 0) * COALESCE(NEW.unit_price, 0.00);
+    NEW.total_item_cost := fn_calculate_item_total(NEW.quantity, NEW.unit_price);
     NEW.updated_at      := NOW();
     RETURN NEW;
 END;
@@ -438,22 +421,12 @@ BEGIN
         v_inv_id := NEW.inv_id;
     END IF;
 
-    -- Recalculate invoice cost and quantity from its items
+    -- Recalculate invoice cost (subtotal + tax) and quantity using fn_invoice_total
     UPDATE invoice
-    SET cost       = COALESCE(sub.total_cost, 0.00),
-        quantity   = COALESCE(sub.total_qty, 0),
+    SET cost       = fn_invoice_total(v_inv_id),
+        quantity   = (SELECT COALESCE(SUM(quantity), 0) FROM invoice_item WHERE inv_id = v_inv_id),
         updated_at = NOW()
-    FROM (
-        SELECT
-            SUM(total_item_cost) AS total_cost,
-            SUM(quantity)        AS total_qty
-        FROM invoice_item
-        WHERE inv_id = v_inv_id
-    ) sub
-    WHERE invoice.id = v_inv_id;
-
-    -- Refresh the materialized view
-    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_invoice_totals;
+    WHERE id = v_inv_id;
 
     RETURN NULL;  -- AFTER trigger, return value is ignored
 END;
@@ -682,9 +655,6 @@ BEGIN
             END LOOP;
         END IF;
     END LOOP;
-
-    -- Refresh the materialized view after bulk import
-    REFRESH MATERIALIZED VIEW CONCURRENTLY mv_invoice_totals;
 END;
 $$;
 
@@ -839,14 +809,23 @@ $$;
 
 -- 27. sp_import_vehicles
 -- Bulk-import vehicles from a JSONB array.
+-- Depends on: fn_is_valid_year (year validation, same as sp_create_vehicle)
 CREATE OR REPLACE PROCEDURE sp_import_vehicles(p_data JSONB)
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_rec JSONB;
+    v_rec  JSONB;
+    v_year INT;
 BEGIN
     FOR v_rec IN SELECT jsonb_array_elements(p_data)
     LOOP
+        v_year := (v_rec->>'year')::INT;
+
+        -- Validate year (consistent with sp_create_vehicle)
+        IF NOT fn_is_valid_year(v_year) THEN
+            RAISE EXCEPTION 'Invalid year: %. Must be between 1900 and %.', v_year, EXTRACT(YEAR FROM CURRENT_DATE)::INT + 1;
+        END IF;
+
         INSERT INTO vehicle (
             vehicle_type, plate_number, capacity,
             brand, model, vehicle_status,
@@ -859,7 +838,7 @@ BEGIN
             v_rec->>'brand',
             v_rec->>'model',
             COALESCE(v_rec->>'vehicle_status', 'available'),
-            (v_rec->>'year')::INT,
+            v_year,
             v_rec->>'fuel_type',
             (v_rec->>'last_maintenance_date')::DATE,
             COALESCE((v_rec->>'is_active')::BOOL, true),
@@ -1020,3 +999,4 @@ $$;
 /* END OF rodrigo_objects.sql                                    */
 /* Total: 31 SQL blocks (32 objects including unique indexes)   */
 /*==============================================================*/
+

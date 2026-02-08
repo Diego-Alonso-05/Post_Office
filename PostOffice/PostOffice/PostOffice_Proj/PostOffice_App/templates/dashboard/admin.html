@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Admin Dashboard — Mailly{% endblock %}
+{% block title %}Dashboard — Mailly{% endblock %}
 {% block content %}
 <div class="grid">
   <aside class="sidebar card">
@@ -26,7 +26,7 @@
   </aside>
 
   <section>
-    {% if role == 'admin' %}
+    {% if role == 'admin' or role == 'manager' %}
       <div class="stats">
         <div class="stat card">
           <div class="muted">Vehicles</div>
@@ -62,26 +62,20 @@
         </div>
       </div>
 
+    {% elif role == 'driver' or role == 'client' %}
+      <div class="stats">
+        <div class="stat card">
+          <div class="muted">My Deliveries</div>
+          <h3>{{ stats.my_deliveries }}</h3>
+        </div>
+      </div>
+
     {% else %}
-      <div class="card">
-        <h4 style="margin:0 0 12px">My Deliveries</h4>
-        <table class="table">
-          <thead>
-            <tr><th>Tracking</th><th>To</th><th>Date</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {% for d in stats.my_deliveries %}
-              <tr>
-                <td>{{ d.tracking_number }}</td>
-                <td class="muted">{{ d.recipient_name }}</td>
-                <td class="muted">{{ d.created_at|date:'Y-m-d' }}</td>
-                <td>{{ d.status }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="4" class="muted">No deliveries</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="stats">
+        <div class="stat card">
+          <div class="muted">Total Deliveries</div>
+          <h3>{{ stats.total_deliveries }}</h3>
+        </div>
       </div>
     {% endif %}
   </section>

@@ -5,7 +5,9 @@
   <h3 style="margin:0;">Invoices</h3>
   {% if request.user.role == 'admin' %}
   <div style="display:flex; gap:8px;">
-    <a class="btn btn-primary" href="{% url 'invoice_create' %}">+ New Invoice</a>
+    <a class="btn btn-primary" href="{% url 'invoice_create' %}">
+      + New Invoice
+    </a>
     <a class="btn btn-warning" href="{% url 'invoices_import_json' %}">
       <i class="fa fa-upload"></i> Import JSON
     </a>
@@ -15,11 +17,9 @@
     <a class="btn btn-info" href="{% url 'invoices_export_csv' %}">
       <i class="fa fa-file-csv"></i> Export CSV
     </a>
-	<a class="btn btn-dark" href="{% url 'invoices_export_pdf' %}">
-  <i class="fa fa-file-pdf"></i> Export PDF
-</a>
-
-
+    <a class="btn btn-secondary" href="{% url 'invoices_export_pdf' %}">
+      <i class="fa fa-file-pdf"></i> Export PDF
+    </a>
   </div>
   {% endif %}
 </div>
@@ -39,21 +39,25 @@
     <tbody>
       {% for inv in invoices %}
         <tr>
-          <td><strong>{{ inv.id_invoice }}</strong></td>
-          <td class="muted">{{ inv.invoice_datetime|date:"Y-m-d H:i" }}</td>
-          <td>{% if inv.user %}{{ inv.user.get_full_name|default:inv.user.username }}{% else %}-{% endif %}</td>
-          <td>{{ inv.invoice_status }}</td>
+          <td><strong>{{ inv.id }}</strong></td>
+          <td class="muted">{{ inv.created_at|date:"Y-m-d H:i" }}</td>
+          <td>{% if inv.client_name %}{{ inv.client_name }}{% else %}-{% endif %}</td>
+          <td>{{ inv.status }}</td>
           <td>{{ inv.cost }}</td>
-          <td class="muted">{{ inv.payment_method }}</td>
+          <td class="muted">{{ inv.pay_method }}</td>
           <td style="text-align:right;">
             {% if request.user.role == 'admin' %}
-              <a class="btn" href="{% url 'invoice_edit' inv.id_invoice %}">Edit</a>
+              <a class="btn" href="{% url 'invoice_edit' inv.id %}">Edit</a>
+              <form method="post" action="{% url 'invoice_delete' inv.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger"
+                        onclick="return confirm('Cancel this invoice?')">Delete</button>
+              </form>
             {% endif %}
           </td>
         </tr>
 
-
-{% if inv.items.exists %}
+{% if inv.items %}
 <tr>
   <td colspan="7">
     <table class="table table-sm" style="margin:0; background:rgba(20,40,80,0.4); border-radius:8px;">
@@ -68,14 +72,14 @@
         </tr>
       </thead>
       <tbody>
-        {% for item in inv.items.all %}
+        {% for item in inv.items %}
         <tr>
           <td>{{ item.shipment_type }}</td>
           <td>{{ item.weight }}</td>
           <td>{{ item.delivery_speed }}</td>
           <td>{{ item.quantity }}</td>
           <td>{{ item.unit_price }}</td>
-          <td>{{ item.total_price }}</td>
+          <td>{{ item.total_item_cost }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -765,6 +765,41 @@ END;
 $$;
 
 
+
+DROP MATERIALIZED VIEW IF EXISTS mv_delivery_tracking;
+
+CREATE MATERIALIZED VIEW mv_delivery_tracking AS
+SELECT
+  d.id              AS delivery_id,
+  d.tracking_number AS tracking_number,
+  dt.id             AS tracking_id,
+  dt.status         AS status,
+  dt.notes          AS notes,
+  dt.created_at     AS event_timestamp,
+  dt.staff_id       AS staff_id,
+  u.username        AS staff_username,
+  dt.war_id         AS warehouse_id,
+  w.name            AS warehouse_name
+FROM delivery_tracking dt
+JOIN delivery d ON d.id = dt.del_id
+LEFT JOIN "USER" u ON u.id = dt.staff_id
+LEFT JOIN warehouse w ON w.id = dt.war_id;
+
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_mv_delivery_tracking_tracking_id
+ON mv_delivery_tracking (tracking_id);
+
+CREATE INDEX IF NOT EXISTS ix_mv_delivery_tracking_lookup
+ON mv_delivery_tracking (tracking_number, event_timestamp);
+
+
+
+REFRESH MATERIALIZED VIEW mv_delivery_tracking;
+-- o si quieres concurrente:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY mv_delivery_tracking;
+
+
+
 /*==============================================================*/
 /* END OF david_objects.sql                                      */
 /* Total: 16 objects                                            */

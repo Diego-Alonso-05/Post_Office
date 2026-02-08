@@ -1,31 +1,23 @@
 from django import forms
+from django.db import connection
 from django.utils import timezone
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
-from .models import (
-    InvoiceItem, User, Employee, EmployeeDriver, EmployeeStaff,
-    Warehouse, Vehicle, Invoice, Route, Delivery
-)
+from .models import User
+# NOTE: Only User is imported — all other models (Invoice, Vehicle, Route, etc.)
+# were removed from models.py. Those tables are now DDL-managed.
 
 
 # ==========================================================
-#  USER FORMS
+#  USER FORMS (still Django ORM — User is the only ORM model)
 # ==========================================================
 
-#
-# These forms were previously used with Django ORM (.save()).
-# They are now deprecated because:
-# - USER creation/update is handled via PostgreSQL stored procedures
-#   (sp_create_user, sp_update_user)
-# - Validation is done using plain forms.Form instead
-# - No ORM writes are allowed by project rules
-#
-
+# LEAVE THIS COMMENTED ???
 # class CustomUserCreationForm(UserCreationForm):
 #     class Meta:
 #         model = User
 #         fields = [
-#             "username", "full_name", "email", "contact", "address",
-#             "tax_id", "role", "password1", "password2"
+#             "username", "first_name", "last_name", "email",
+#             "contact", "address", "role", "password1", "password2"
 #         ]
 
 
@@ -33,8 +25,8 @@ from .models import (
 #     class Meta:
 #         model = User
 #         fields = [
-#             "username", "full_name", "email", "contact", "address",
-#             "tax_id", "role"
+#             "username", "first_name", "last_name", "email",
+#             "contact", "address", "role"
 #         ]
 
 
@@ -71,101 +63,264 @@ class UserForm(forms.Form):
     role = forms.ChoiceField(choices=USER_ROLE_CHOICES)
     is_active = forms.BooleanField(required=False, initial=True)
 # ==========================================================
-#  EMPLOYEE FORMS (Driver / Staff specialization)
+#  INVOICE FORM  (plain Form — matches DDL INVOICE table)
 # ==========================================================
+#
+#  Why plain forms.Form instead of ModelForm?
+#  - The Invoice Django model no longer exists in models.py
+#  - The INVOICE table is created by DDL.sql, not Django migrations
+#  - All CRUD goes through stored procedures, not ORM .save()
+#  - Field names here match DDL column names exactly
+#    (e.g. "status" not "invoice_status", "pay_method" not "payment_method")
+#
+#  These choice lists match the CHECK constraints in DDL.sql:
+#    CHK_INVOICE_STATUS, CHK_INVOICE_TYPE, CHK_INVOICE_PAY_METHOD
+
+INVOICE_STATUS_CHOICES = [
+    ("pending",    "Pending"),
+    ("completed",  "Completed"),
+    ("cancelled",  "Cancelled"),
+    ("refunded",   "Refunded"),
+]
+
+INVOICE_TYPE_CHOICES = [
+    ("paid_on_send",     "Paid on Send"),
+    ("paid_on_delivery", "Paid on Delivery"),
+]
+
+PAY_METHOD_CHOICES = [
+    ("cash",           "Cash"),
+    ("card",           "Card"),
+    ("mobile_payment", "Mobile Payment"),
+    ("account",        "Account"),
+]
+
+
+class InvoiceForm(forms.Form):
+    # --- FK dropdowns ---
+    # These are ChoiceField, NOT ModelChoiceField (no model to query).
+    # Choices are loaded dynamically from the DB in __init__ below.
+    # ChoiceField returns strings, so the view converts to int before
+    # passing to sp_create_invoice (which expects INT parameters).
+    war_id    = forms.ChoiceField(label="Warehouse",     required=False)
+    staff_id  = forms.ChoiceField(label="Staff Member",  required=False)
+    client_id = forms.ChoiceField(label="Client",        required=False)
+
+    # --- Invoice header fields ---
+    # These map 1:1 to DDL INVOICE columns and sp_create_invoice parameters
+    status     = forms.ChoiceField(choices=INVOICE_STATUS_CHOICES, initial="pending", label="Status")
+    type       = forms.ChoiceField(choices=INVOICE_TYPE_CHOICES,   label="Invoice Type")
+    paid       = forms.BooleanField(required=False, initial=False, label="Paid")
+    pay_method = forms.ChoiceField(choices=PAY_METHOD_CHOICES,     label="Payment Method")
+
+    # --- Contact/address fields ---
+    name    = forms.CharField(max_length=255, required=False, label="Name")
+    address = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False, label="Address")
+    contact = forms.CharField(max_length=255, required=False, label="Contact")
+
+    # NOTE: "quantity" and "cost" are NOT form fields.
+    # They are auto-calculated by DB triggers when invoice items are added:
+    #   trg_invoice_update_cost → fn_invoice_total → fn_invoice_subtotal + fn_calculate_tax
+    # The view passes 0 for both when calling sp_create_invoice.
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Populate FK dropdown choices from the database.
+        # Each query fetches (id, display_name) pairs.
+        # The empty tuple ("", "---------") is the default "nothing selected" option.
+        with connection.cursor() as cur:
+
+            # Warehouses — only active ones
+            cur.execute("SELECT id, name FROM warehouse WHERE is_active = true ORDER BY name")
+            self.fields["war_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
+
+            # Staff members — join employee_staff → USER to get full name
+            cur.execute("""
+                SELECT es.id, u.first_name || ' ' || u.last_name
+                FROM employee_staff es
+                JOIN "USER" u ON u.id = es.id
+                ORDER BY u.first_name
+            """)
+            self.fields["staff_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
+
+            # Clients — join client → USER to get full name
+            cur.execute("""
+                SELECT c.id, u.first_name || ' ' || u.last_name
+                FROM client c
+                JOIN "USER" u ON u.id = c.id
+                ORDER BY u.first_name
+            """)
+            self.fields["client_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
+
 
 # ==========================================================
-#  ❌ EMPLOYEE FORMS (ORM-based) — DEPRECATED
+#  INVOICE ITEM FORM + FORMSET
 # ==========================================================
-# These forms were originally implemented using Django ORM
-# (ModelForm + .save()).
 #
-# ❌ They must NOT be used anymore because:
-# - Employee, EmployeeDriver, EmployeeStaff are no longer ORM models
-# - All persistence is handled by PostgreSQL stored procedures
-# - Using .save() would bypass DB business rules and triggers
+#  Each field maps to a parameter of sp_add_invoice_item:
+#    sp_add_invoice_item(p_inv_id, p_shipment_type, p_weight,
+#                        p_delivery_speed, p_quantity, p_unit_price, p_notes)
 #
-# ✅ Validation is now done with plain forms.Form
-# ✅ Persistence is done via CALL sp_create_employee / sp_update_employee
+#  Fields NOT included here (handled automatically by DB triggers):
+#    - total_item_cost → set by trg_invoice_item_calc_total (qty × unit_price)
+#    - invoice.cost    → updated by trg_invoice_update_cost (sum of items + 23% tax)
+#    - inv_id          → passed in the view, not a form field
+
+class InvoiceItemForm(forms.Form):
+    shipment_type  = forms.CharField(max_length=50, required=False, label="Shipment Type")
+    weight         = forms.DecimalField(max_digits=10, decimal_places=2, required=False, label="Weight (kg)")
+    delivery_speed = forms.CharField(max_length=50, required=False, label="Delivery Speed")
+    quantity       = forms.IntegerField(min_value=1, label="Quantity")
+    unit_price     = forms.DecimalField(max_digits=10, decimal_places=2, min_value=0, label="Unit Price (€)")
+    notes          = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False, label="Notes")
+
+
+from django.forms import formset_factory
+
+# formset_factory creates a collection of InvoiceItemForm instances.
+# - extra=1    → show 1 blank row for adding a new item
+# - can_delete → adds a DELETE checkbox to each row (used in edit, but also
+#                needed here so formset validation handles it correctly)
 #
-# Kept commented for academic reference only.
+# Old code used inlineformset_factory(Invoice, InvoiceItem, ...) which
+# required both Django models. formset_factory works with plain Form classes.
+InvoiceItemFormSet = formset_factory(
+    InvoiceItemForm,
+    extra=1,
+    can_delete=True,
+)
+
+
 # ==========================================================
-
-# class EmployeeForm(forms.ModelForm):
-#     # Expose the related user so the user assignment can be handled via the form
-#     user = forms.ModelChoiceField(
-#         queryset=User.objects.exclude(role__in=["admin", "client"]),
-#         required=True,
-#         label="User",
-#     )
+#  VEHICLE FORM  (plain Form — matches DDL VEHICLE table)
+# ==========================================================
 #
-#     class Meta:
-#         model = Employee
-#         fields = [
-#             "user", "position", "schedule", "wage",
-#             "is_active", "hire_date"
-#         ]
-#         widgets = {
-#             "hire_date": forms.DateInput(attrs={"type": "date"}),
-#         }
+#  Field names match DDL column names exactly.
+#  Choice lists match the CHECK constraints in DDL.sql:
+#    CHK_VEHICLE_TYPE, CHK_VEHICLE_STATUS, CHK_VEHICLE_FUEL
+
+VEHICLE_TYPE_CHOICES = [
+    ("van",        "Van"),
+    ("truck",      "Truck"),
+    ("motorcycle", "Motorcycle"),
+    ("bicycle",    "Bicycle"),
+    ("car",        "Car"),
+]
+
+VEHICLE_STATUS_CHOICES = [
+    ("available",      "Available"),
+    ("in_use",         "In Use"),
+    ("maintenance",    "Maintenance"),
+    ("out_of_service", "Out of Service"),
+]
+
+VEHICLE_FUEL_CHOICES = [
+    ("diesel",   "Diesel"),
+    ("petrol",   "Petrol"),
+    ("electric", "Electric"),
+    ("hybrid",   "Hybrid"),
+]
+
+
+class VehicleForm(forms.Form):
+    vehicle_type          = forms.ChoiceField(choices=VEHICLE_TYPE_CHOICES, label="Vehicle Type")
+    plate_number          = forms.CharField(max_length=20, label="Plate Number")
+    capacity              = forms.DecimalField(max_digits=10, decimal_places=2, required=False, label="Capacity (kg)")
+    brand                 = forms.CharField(max_length=50, required=False, label="Brand")
+    model                 = forms.CharField(max_length=50, required=False, label="Model")
+    vehicle_status        = forms.ChoiceField(choices=VEHICLE_STATUS_CHOICES, initial="available", label="Status")
+    year                  = forms.IntegerField(label="Year")
+    fuel_type             = forms.ChoiceField(choices=VEHICLE_FUEL_CHOICES, label="Fuel Type")
+    last_maintenance_date = forms.DateField(required=False, label="Last Maintenance Date",
+                                            widget=forms.DateInput(attrs={"type": "date"}))
+
+
+# ==========================================================
+#  ROUTE FORM  (plain Form — matches DDL ROUTE table)
+# ==========================================================
 #
-#     def clean_user(self):
-#         user = self.cleaned_data.get("user")
-#         # Ensure the selected user does not already have an employee record
-#         if user and hasattr(user, "employee") and (not self.instance.pk or user.employee.pk != self.instance.pk):
-#             raise forms.ValidationError("This user is already assigned to an employee record.")
-#         return user
-#
-#     def clean_wage(self):
-#         wage = self.cleaned_data.get("wage")
-#         if wage is not None and wage < 0:
-#             raise forms.ValidationError("Wage must be a positive number.")
-#         return wage
-#
-#
-# class EmployeeDriverForm(forms.ModelForm):
-#     class Meta:
-#         model = EmployeeDriver
-#         fields = [
-#             "license_number", "license_category",
-#             "license_expiry_date", "driving_experience_years",
-#             "driver_status"
-#         ]
-#         widgets = {
-#             "license_expiry_date": forms.DateInput(attrs={"type": "date"}),
-#         }
-#
-#     def clean(self):
-#         cleaned_data = super().clean()
-#         expiry = cleaned_data.get("license_expiry_date")
-#         experience = cleaned_data.get("driving_experience_years")
-#         if expiry and expiry <= timezone.now().date():
-#             self.add_error("license_expiry_date", "License expiry date must be in the future.")
-#         if experience is not None and experience < 0:
-#             self.add_error("driving_experience_years", "Driving experience must be non-negative.")
-#         return cleaned_data
-#
-#
-# class EmployeeStaffForm(forms.ModelForm):
-#     class Meta:
-#         model = EmployeeStaff
-#         fields = [
-#             "department"
-#         ]
+#  Field names match DDL column names exactly.
+#  Choice list matches the CHECK constraint in DDL.sql:
+#    CHK_ROUTE_STATUS
+
+ROUTE_STATUS_CHOICES = [
+    ("not_started", "Not Started"),
+    ("on_going",    "On Going"),
+    ("finished",    "Finished"),
+    ("cancelled",   "Cancelled"),
+]
 
 
+class RouteForm(forms.Form):
+    # --- FK dropdowns ---
+    driver_id  = forms.ChoiceField(label="Driver",    required=False)
+    vehicle_id = forms.ChoiceField(label="Vehicle",   required=False)
+    war_id     = forms.ChoiceField(label="Warehouse", required=False)
+
+    # --- Route fields ---
+    description      = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False, label="Description")
+    delivery_status  = forms.ChoiceField(choices=ROUTE_STATUS_CHOICES, initial="not_started", label="Status")
+    delivery_date    = forms.DateField(required=False, label="Delivery Date",
+                                       widget=forms.DateInput(attrs={"type": "date"}))
+    delivery_start_time = forms.DateTimeField(
+        required=False, label="Start Time",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
+    )
+    delivery_end_time = forms.DateTimeField(
+        required=False, label="End Time",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
+    )
+    expected_duration = forms.TimeField(required=False, label="Expected Duration",
+                                        widget=forms.TimeInput(attrs={"type": "time"}))
+    kms_travelled    = forms.DecimalField(max_digits=8, decimal_places=2, required=False, label="KMs Travelled")
+    driver_notes     = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False, label="Driver Notes")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        with connection.cursor() as cur:
+
+            # Drivers — employee_driver JOIN USER to get full name
+            cur.execute("""
+                SELECT ed.id, u.first_name || ' ' || u.last_name
+                FROM employee_driver ed
+                JOIN "USER" u ON u.id = ed.id
+                ORDER BY u.first_name
+            """)
+            self.fields["driver_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
+
+            # Vehicles — active vehicles with plate + brand/model
+            cur.execute("""
+                SELECT id, plate_number || ' (' || brand || ' ' || model || ')'
+                FROM vehicle
+                WHERE is_active = true
+                ORDER BY plate_number
+            """)
+            self.fields["vehicle_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
+
+            # Warehouses — only active ones
+            cur.execute("SELECT id, name FROM warehouse WHERE is_active = true ORDER BY name")
+            self.fields["war_id"].choices = [("", "---------")] + [
+                (r[0], r[1]) for r in cur.fetchall()
+            ]
 
 
-
-
-
-
-
-
-
-
-
-# forms.py
+# ===============
+#  EMPLOYEE FORMS
+# ===============
 from django import forms
 
 class EmployeeForm(forms.Form):
@@ -221,85 +376,9 @@ class EmployeeStaffForm(forms.Form):
         required=False,
     )
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ==========================================================
 #  WAREHOUSE FORM
 # ==========================================================
-
-"""
-class WarehouseForm(forms.ModelForm):
-    # Formulario Django para el modelo Warehouse (Almacén)
-    # Proporciona una interfaz para crear/editar almacenes con validación personalizada
-    
-    class Meta:
-        # Configuración del formulario basado en el modelo Warehouse
-        model = Warehouse  # Modelo de base de datos para almacenes
-        
-        # Campos del modelo que se mostrarán en el formulario
-        fields = [
-            "name",  # Nombre del almacén (campo de texto)
-            "address",  # Dirección física del almacén
-            "contact",  # Información de contacto (email/teléfono)
-            "po_schedule_open",  # Hora de apertura para órdenes de compra
-            "po_schedule_close",  # Hora de cierre para órdenes de compra
-            "maximum_storage_capacity"  # Capacidad máxima en unidades/palets
-        ]
-        
-        # Personalización de cómo se muestran los campos en HTML
-        widgets = {
-            # Usa el input type="time" nativo de HTML5 para selección de hora
-            "po_schedule_open": forms.TimeInput(attrs={"type": "time"}),
-            "po_schedule_close": forms.TimeInput(attrs={"type": "time"}),
-        }
-
-    def clean(self):
-        # Método de validación personalizado que se ejecuta automáticamente
-        # Valida relaciones entre campos y reglas de negocio
-        
-        # Primero obtiene los datos limpios del formulario base
-        cleaned_data = super().clean()
-        
-        # Extrae los valores de los campos relevantes para validación
-        open_time = cleaned_data.get("po_schedule_open")
-        close_time = cleaned_data.get("po_schedule_close")
-        capacity = cleaned_data.get("maximum_storage_capacity")
-        
-        # Validación 1: La hora de cierre debe ser posterior a la de apertura
-        # Ejemplo inválido: apertura=17:00, cierre=16:00
-        # Ejemplo válido: apertura=09:00, cierre=17:00
-        if open_time and close_time and close_time <= open_time:
-            self.add_error(
-                "po_schedule_close", 
-                "Closing time must be after opening time."
-            )
-        
-        # Validación 2: La capacidad máxima debe ser un número positivo
-        # Ejemplo inválido: 0 o -100
-        # Ejemplo válido: 1000
-        if capacity is not None and capacity <= 0:
-            self.add_error(
-                "maximum_storage_capacity", 
-                "Maximum storage capacity must be positive."
-            )
-        
-        # Devuelve los datos limpios (con posibles errores añadidos)
-        return cleaned_data
-"""
-
-
-
-
 class WarehouseForm(forms.Form):
     name = forms.CharField(max_length=100)
     address = forms.CharField(max_length=255)
@@ -333,144 +412,125 @@ class WarehouseForm(forms.Form):
         return cleaned_data
 
 # ==========================================================
-#  VEHICLE FORM
+#  DELIVERIES FORMS (SQL-FIRST, NO ORM)
+#  Matches david_objects.sql procedures:
+#   - sp_create_delivery(... p_weight INT, p_delivery_date TIMESTAMPTZ, ...)
+#   - sp_update_delivery(... p_weight INT, p_delivery_date TIMESTAMPTZ, ...)
 # ==========================================================
 
-class VehicleForm(forms.ModelForm):
-    class Meta:
-        model = Vehicle
-        fields = [
-            "vehicle_type", "plate_number", "capacity",
-            "brand", "model", "vehicle_status",
-            "year", "fuel_type", "last_maintenance_date"
-        ]
-        widgets = {
-            "last_maintenance_date": forms.DateInput(attrs={"type": "date"}),
-        }
+DELIVERY_STATUS_CHOICES = [
+    ("registered", "Registered"),
+    ("ready", "Ready"),
+    ("pending", "Pending"),
+    ("in_transit", "In transit"),
+    ("completed", "Completed"),
+    ("cancelled", "Cancelled"),
+    # ("delayed", "Delayed"),  # only keep if your DB allows it (your workflow doesn't mention it)
+]
 
-    def clean_capacity(self):
-        capacity = self.cleaned_data.get("capacity")
-        if capacity is not None and capacity <= 0:
-            raise forms.ValidationError("Capacity must be a positive number.")
-        return capacity
-
-    def clean_year(self):
-        year = self.cleaned_data.get("year")
-        if year is not None and (year < 1900 or year > 2100):
-            raise forms.ValidationError("Year must be between 1900 and 2100.")
-        return year
+DELIVERY_PRIORITY_CHOICES = [
+    ("low", "Low"),
+    ("normal", "Normal"),
+    ("high", "High"),
+    ("urgent", "Urgent"),
+]
 
 
-# ==========================================================
-#  INVOICE FORM
-# ==========================================================
+class DeliveryCreateForm(forms.Form):
+    # --- FKs / references (IDs) ---
+    driver_id = forms.IntegerField(required=False, min_value=1, label="Driver ID")
+    route_id = forms.IntegerField(required=False, min_value=1, label="Route ID")
+    inv_id = forms.IntegerField(required=False, min_value=1, label="Invoice ID")
+    client_id = forms.IntegerField(required=False, min_value=1, label="Client ID")
+    war_id = forms.IntegerField(required=False, min_value=1, label="Warehouse ID")
 
-class InvoiceForm(forms.ModelForm):
-    class Meta:
-        model = Invoice
-        fields = [
-            "user", "invoice_status", "invoice_type",
-            "quantity", "invoice_datetime", "cost",
-            "paid", "payment_method",
-            "name", "address", "contact",
-        ]
-        widgets = {
-            "invoice_datetime": forms.DateTimeInput(attrs={"type": "datetime-local"}),
-        }
+    # --- delivery basic fields ---
+    tracking_number = forms.CharField(required=False, max_length=50, label="Tracking number")
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Description")
 
-class InvoiceItemForm(forms.ModelForm):
-    class Meta:
-        model = InvoiceItem
-        fields = ["shipment_type", "weight", "delivery_speed", "quantity", "unit_price", "notes"]
-        widgets = {
-            "notes": forms.Textarea(attrs={"rows": 2}),
-        }
+    # --- sender ---
+    sender_name = forms.CharField(required=False, max_length=100, label="Sender name")
+    sender_address = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Sender address")
+    sender_phone = forms.CharField(required=False, max_length=20, label="Sender phone")
+    sender_email = forms.EmailField(required=False, label="Sender email")
 
+    # --- recipient ---
+    recipient_name = forms.CharField(required=False, max_length=100, label="Recipient name")
+    recipient_address = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Recipient address")
+    recipient_phone = forms.CharField(required=False, max_length=20, label="Recipient phone")
+    recipient_email = forms.EmailField(required=False, label="Recipient email")
 
-# ==========================================================
-#  ROUTE FORM
-# ==========================================================
+    # --- package ---
+    item_type = forms.CharField(required=False, max_length=20, label="Item type")
 
-class RouteForm(forms.ModelForm):
-    class Meta:
-        model = Route
-        fields = [
-            "description", "delivery_status",
-            "delivery_date", "delivery_start_time",
-            "delivery_end_time", "expected_duration",
-            "kms_travelled", "driver_notes",
-            "driver", "vehicle", "warehouse"
-        ]
-        widgets = {
-            "delivery_date": forms.DateInput(attrs={"type": "date"}),
-            "delivery_start_time": forms.TimeInput(attrs={"type": "time"}),
-            "delivery_end_time": forms.TimeInput(attrs={"type": "time"}),
-        }
+    # DB/SP expect INT and SP enforces >= 1 if provided
+    weight = forms.IntegerField(required=False, min_value=1, label="Weight")
 
-    def clean(self):
-        cleaned_data = super().clean()
-        start = cleaned_data.get("delivery_start_time")
-        end = cleaned_data.get("delivery_end_time")
-        duration = cleaned_data.get("expected_duration")
-        if start and end and end <= start:
-            self.add_error("delivery_end_time", "End time must be after start time.")
-        if duration is not None and duration.total_seconds() <= 0:
-            self.add_error("expected_duration", "Expected duration must be positive.")
-        return cleaned_data
+    dimensions = forms.CharField(required=False, max_length=50, label="Dimensions")
+
+    # --- status / priority / dates ---
+    # In DB sp_create_delivery default is 'registered' if you pass NULL
+    status = forms.ChoiceField(required=False, choices=DELIVERY_STATUS_CHOICES, initial="registered", label="Status")
+    priority = forms.ChoiceField(required=False, choices=DELIVERY_PRIORITY_CHOICES, initial="normal", label="Priority")
+
+    # DB expects TIMESTAMPTZ. Your template currently uses <input type="date">,
+    # so accept both date-only and datetime-local formats.
+    delivery_date = forms.DateTimeField(
+        required=False,
+        input_formats=[
+            "%Y-%m-%d",          # from <input type="date">
+            "%Y-%m-%dT%H:%M",    # from <input type="datetime-local">
+            "%Y-%m-%d %H:%M:%S",
+        ],
+        label="Delivery date",
+    )
 
 
-# ==========================================================
-#  DELIVERY FORM
-# ==========================================================
+class DeliveryEditForm(forms.Form):
+    # same as update SP fields (no status here)
+    driver_id = forms.IntegerField(required=False, min_value=1, label="Driver ID")
+    route_id = forms.IntegerField(required=False, min_value=1, label="Route ID")
+    inv_id = forms.IntegerField(required=False, min_value=1, label="Invoice ID")
+    client_id = forms.IntegerField(required=False, min_value=1, label="Client ID")
+    war_id = forms.IntegerField(required=False, min_value=1, label="Warehouse ID")
 
-class DeliveryForm(forms.ModelForm):
-    class Meta:
-        model = Delivery
-        fields = [
-            "invoice",
-            "tracking_number", "description",
+    tracking_number = forms.CharField(required=False, max_length=50, label="Tracking number")
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Description")
 
-            # SENDER
-            "sender_name", "sender_address",
-            "sender_phone", "sender_email",
+    sender_name = forms.CharField(required=False, max_length=100, label="Sender name")
+    sender_address = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Sender address")
+    sender_phone = forms.CharField(required=False, max_length=20, label="Sender phone")
+    sender_email = forms.EmailField(required=False, label="Sender email")
 
-            # RECIPIENT
-            "recipient_name", "recipient_address",
-            "recipient_phone", "recipient_email",
+    recipient_name = forms.CharField(required=False, max_length=100, label="Recipient name")
+    recipient_address = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Recipient address")
+    recipient_phone = forms.CharField(required=False, max_length=20, label="Recipient phone")
+    recipient_email = forms.EmailField(required=False, label="Recipient email")
 
-            "item_type", "weight", "dimensions",
+    item_type = forms.CharField(required=False, max_length=20, label="Item type")
+    weight = forms.IntegerField(required=False, min_value=1, label="Weight")
+    dimensions = forms.CharField(required=False, max_length=50, label="Dimensions")
 
-            "status", "priority",
-            "updated_at",
-            "in_transition",
+    priority = forms.ChoiceField(required=False, choices=DELIVERY_PRIORITY_CHOICES, label="Priority")
+    in_transition = forms.BooleanField(required=False, label="In transition")
 
-            "delivery_date",
-
-            "driver", "client", "route"
-        ]
-        widgets = {
-            "updated_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
-            "delivery_date": forms.DateInput(attrs={"type": "date"}),
-        }
-
-    def clean(self):
-        cleaned_data = super().clean()
-        weight = cleaned_data.get("weight")
-        if weight is not None and weight <= 0:
-            self.add_error("weight", "Weight must be a positive number.")
-        return cleaned_data
+    delivery_date = forms.DateTimeField(
+        required=False,
+        input_formats=[
+            "%Y-%m-%d",
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+        ],
+        label="Delivery date",
+    )
 
 
-class VehicleImportForm(forms.Form):
-    file = forms.FileField(label="Select JSON file")
+class DeliveryStatusUpdateForm(forms.Form):
+    status = forms.ChoiceField(choices=DELIVERY_STATUS_CHOICES, label="Status")
+    staff_id = forms.IntegerField(required=False, min_value=1, label="Staff ID")
+    warehouse_id = forms.IntegerField(required=False, min_value=1, label="Warehouse ID")
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Notes")
 
 
-class WarehouseImportForm(forms.Form):
-    file = forms.FileField()
-
-
-class DeliveryImportForm(forms.Form):
-    file = forms.FileField()
-
-class RouteImportForm(forms.Form):
-    file = forms.FileField()
+class DeliveryImportJSONForm(forms.Form):
+    file = forms.FileField(label="JSON file")
