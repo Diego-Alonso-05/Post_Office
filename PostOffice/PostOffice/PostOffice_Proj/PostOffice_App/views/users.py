@@ -15,7 +15,9 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 
+from ..forms import UserForm
 from .decorators import role_required
+
 
 # # ==========================================================
 # #  ADMIN PROFILE
@@ -77,58 +79,92 @@ def users_list(request):
 
 
 @login_required
-@role_required(["admin", "manager"])
-def employees_create(request):
+@role_required(["admin"])
+def users_form(request, user_id=None):
     """
-    Create an employee (driver or staff) using sp_create_employee.
-    This is the ONLY valid way to assign driver/staff roles.
+    Create or edit a generic USER (admin / manager / client).
+    Uses stored procedures instead of ORM.
     """
+
+    is_edit = user_id is not None
 
     if request.method == "POST":
-        data = request.POST
+        form = UserForm(request.POST)
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                CALL sp_create_employee(
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s
-                )
-                """,
-                [
-                    # USER data
-                    data["username"],
-                    data["email"],
-                    data["password"],          # already hashed or handled before
-                    data.get("first_name"),
-                    data.get("last_name"),
-                    data.get("contact"),
-                    data.get("address"),
+        if form.is_valid():
+            cd = form.cleaned_data
 
-                    # EMPLOYEE data
-                    data["war_id"],
-                    data["emp_position"],      # 'driver' or 'staff'
-                    data.get("schedule"),
-                    data.get("wage"),
-                    data.get("hire_date"),
+            with connection.cursor() as cursor:
+                if is_edit:
+                    # =========================
+                    # UPDATE EXISTING USER
+                    # =========================
+                    cursor.execute(
+                        """
+                        CALL sp_update_user(
+                            %s,  -- id
+                            %s,  -- email
+                            %s,  -- first_name
+                            %s,  -- last_name
+                            %s,  -- contact
+                            %s,  -- address
+                            %s,  -- role
+                            %s   -- is_active
+                        )
+                        """,
+                        [
+                            user_id,
+                            cd["email"],
+                            cd["first_name"],
+                            cd["last_name"],
+                            cd["contact"],
+                            cd["address"],
+                            cd["role"],
+                            cd.get("is_active", False),
+                        ],
+                    )
+                else:
+                    # =========================
+                    # CREATE NEW USER
+                    # =========================
+                    cursor.execute(
+                        """
+                        CALL sp_create_user(
+                            %s,  -- username
+                            %s,  -- email
+                            %s,  -- password
+                            %s,  -- first_name
+                            %s,  -- last_name
+                            %s,  -- contact
+                            %s,  -- address
+                            %s   -- role
+                        )
+                        """,
+                        [
+                            cd["username"],
+                            cd["email"],
+                            make_password(cd["password"]),
+                            cd["first_name"],
+                            cd["last_name"],
+                            cd["contact"],
+                            cd["address"],
+                            cd["role"],
+                        ],
+                    )
 
-                    # DRIVER data (nullable)
-                    data.get("license_number"),
-                    data.get("license_category"),
-                    data.get("license_expiry"),
-                    data.get("driving_experience"),
-                    data.get("driver_status"),
+            return redirect("users_list")
 
-                    # STAFF data (nullable)
-                    data.get("department"),
-                ],
-            )
+    else:
+        form = UserForm()
 
-        return redirect("employees_list")
-
-    return render(request, "employees/employees_form.html")
+    return render(
+        request,
+        "core/users_form.html",
+        {
+            "form": form,
+            "is_edit": is_edit,
+        },
+    )
 
 
 
@@ -189,12 +225,6 @@ def clients_list(request):
 
 
 
-from django.db import connection
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.hashers import make_password
-
-from .decorators import role_required
 
 
 @login_required
@@ -209,70 +239,71 @@ def clients_form(request, user_id=None):
     is_edit = user_id is not None
 
     if request.method == "POST":
-        data = request.POST
+        form = UserForm(request.POST)
 
-        with connection.cursor() as cursor:
-            if is_edit:
-                # UPDATE existing client
-                cursor.execute(
-                    """
-                    CALL sp_update_user(
-                        %s,  -- id
-                        %s,  -- email
-                        %s,  -- first_name
-                        %s,  -- last_name
-                        %s,  -- contact
-                        %s,  -- address
-                        %s,  -- role
-                        %s   -- is_active
-                    )
-                    """,
-                    [
-                        user_id,
-                        data.get("email"),
-                        data.get("first_name"),
-                        data.get("last_name"),
-                        data.get("contact"),
-                        data.get("address"),
-                        "client",                          # forced
-                        data.get("is_active") == "on",     #TODO
-                    ],
-                )
-            else:
-                # CREATE new client
-                cursor.execute(
-                    """
-                    CALL sp_create_user(
-                        %s,  -- username
-                        %s,  -- email
-                        %s,  -- password (hashed)
-                        %s,  -- first_name
-                        %s,  -- last_name
-                        %s,  -- contact
-                        %s,  -- address
-                        %s   -- role
-                    )
-                    """,
-                    [
-                        data["username"],
-                        data["email"],
-                        make_password(data["password"]),
-                        data.get("first_name"),
-                        data.get("last_name"),
-                        data.get("contact"),
-                        data.get("address"),
-                        "client",                          # forced
-                    ],
-                )
+        if form.is_valid():
+            cd = form.cleaned_data
 
-        return redirect("clients_list")
+            with connection.cursor() as cursor:
+                if is_edit:
+                    # UPDATE existing client
+                    cursor.execute(
+                        """
+                        CALL sp_update_user(
+                            %s,  -- id
+                            %s,  -- email
+                            %s,  -- first_name
+                            %s,  -- last_name
+                            %s,  -- contact
+                            %s,  -- address
+                            %s,  -- role
+                            %s   -- is_active
+                        )
+                        """,
+                        [
+                            user_id,
+                            cd["email"],
+                            cd["first_name"],
+                            cd["last_name"],
+                            cd["contact"],
+                            cd["address"],
+                            "client",
+                            cd["is_active"],
+                        ],
+                    )
+                else:
+                    # CREATE new client
+                    cursor.execute(
+                        """
+                        CALL sp_create_user(
+                            %s, %s, %s, %s, %s, %s, %s, %s
+                        )
+                        """,
+                        [
+                            cd["username"],
+                            cd["email"],
+                            make_password(cd["password"]),
+                            cd["first_name"],
+                            cd["last_name"],
+                            cd["contact"],
+                            cd["address"],
+                            "client",
+                        ],
+                    )
+
+            return redirect("clients_list")
+
+    else:
+        form = UserForm()
 
     return render(
         request,
         "core/clients_form.html",
-        {"is_edit": is_edit},
+        {
+            "form": form,
+            "is_edit": is_edit,
+        },
     )
-
 
 
 

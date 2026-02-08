@@ -4,6 +4,7 @@ from django.db import connection
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from ..forms import WarehouseForm
 
 from .decorators import role_required
 
@@ -93,43 +94,52 @@ def warehouses_list(request):
 def warehouses_create(request):
     """
     Create a new warehouse using sp_create_warehouse.
-    All validations are enforced at DB level.
+    Django forms are used ONLY for validation.
+    All persistence is handled by PostgreSQL procedures.
     """
 
     if request.method == "POST":
-        data = request.POST
+        form = WarehouseForm(request.POST)
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                CALL sp_create_warehouse(
-                    %s,  -- name
-                    %s,  -- contact
-                    %s,  -- address
-                    %s,  -- maximum_storage_capacity
-                    %s,  -- schedule_open
-                    %s,  -- schedule_close
-                    %s   -- schedule
+        if form.is_valid():
+            cd = form.cleaned_data
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CALL sp_create_warehouse(
+                        %s,  -- name
+                        %s,  -- contact
+                        %s,  -- address
+                        %s,  -- maximum_storage_capacity
+                        %s,  -- schedule_open
+                        %s,  -- schedule_close
+                        %s   -- schedule
+                    )
+                    """,
+                    [
+                        cd["name"],
+                        cd.get("contact"),
+                        cd["address"],
+                        cd["maximum_storage_capacity"],
+                        cd.get("po_schedule_open"),
+                        cd.get("po_schedule_close"),
+                        cd.get("schedule"),
+                    ],
                 )
-                """,
-                [
-                    data["name"],
-                    data["contact"],
-                    data["address"],
-                    data["maximum_storage_capacity"],
-                    data.get("schedule_open"),
-                    data.get("schedule_close"),
-                    data.get("schedule"),
-                ],
-            )
 
-        return redirect("warehouses_list")
+            return redirect("warehouses_list")
+
+    else:
+        form = WarehouseForm()
 
     return render(
         request,
         "warehouses/create.html",
+        {
+            "form": form,
+        },
     )
-
 # @login_required
 # @role_required(["admin", "staff"])
 # def warehouses_edit(request, warehouse_id):
@@ -165,48 +175,57 @@ def warehouses_create(request):
 def warehouses_edit(request, warehouse_id):
     """
     Edit an existing warehouse using sp_update_warehouse.
-    All validations are enforced at DB level.
+    Validation is done via WarehouseForm.
+    Persistence is handled by PostgreSQL stored procedure.
     """
 
     if request.method == "POST":
-        data = request.POST
+        form = WarehouseForm(request.POST)
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                CALL sp_update_warehouse(
-                    %s,  -- id
-                    %s,  -- name
-                    %s,  -- contact
-                    %s,  -- address
-                    %s,  -- schedule_open
-                    %s,  -- schedule_close
-                    %s,  -- schedule
-                    %s,  -- maximum_storage_capacity
-                    %s   -- is_active
+        if form.is_valid():
+            cd = form.cleaned_data
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CALL sp_update_warehouse(
+                        %s,  -- id
+                        %s,  -- name
+                        %s,  -- contact
+                        %s,  -- address
+                        %s,  -- schedule_open
+                        %s,  -- schedule_close
+                        %s,  -- schedule
+                        %s,  -- maximum_storage_capacity
+                        %s   -- is_active
+                    )
+                    """,
+                    [
+                        warehouse_id,
+                        cd["name"],
+                        cd["contact"],
+                        cd["address"],
+                        cd["po_schedule_open"],
+                        cd["po_schedule_close"],
+                        None,  # schedule (optional / derived)
+                        cd["maximum_storage_capacity"],
+                        cd.get("is_active", True),
+                    ],
                 )
-                """,
-                [
-                    warehouse_id,
-                    data.get("name"),
-                    data.get("contact"),
-                    data.get("address"),
-                    data.get("schedule_open"),
-                    data.get("schedule_close"),
-                    data.get("schedule"),
-                    data.get("maximum_storage_capacity"),
-                    data.get("is_active") == "on",
-                ],
-            )
 
-        return redirect("warehouses_list")
+            return redirect("warehouses_list")
+
+    else:
+        form = WarehouseForm()
 
     return render(
         request,
         "warehouses/edit.html",
-        {"warehouse_id": warehouse_id},
+        {
+            "form": form,
+            "warehouse_id": warehouse_id,
+        },
     )
-
 # @login_required
 # @role_required(["admin"])
 # def warehouses_delete(request, warehouse_id):
