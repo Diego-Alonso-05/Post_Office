@@ -586,15 +586,24 @@ def warehouses_export_csv(request):
     header = (
         "id,"
         "name,"
-        "address,"
         "contact,"
+        "address,"
         "schedule_open,"
         "schedule_close,"
-        "maximum_storage_capacity\n"
+        "schedule,"
+        "maximum_storage_capacity,"
+        "is_active,"
+        "created_at,"
+        "updated_at\n"
     )
 
-    csv_body = "\n".join(row[0] for row in rows)
-    csv_data = header + csv_body
+    csv_lines = []
+    for row in rows:
+        csv_lines.append(
+            ",".join("" if value is None else str(value) for value in row)
+        )
+
+    csv_data = header + "\n".join(csv_lines)
 
     create_notification(
         notification_type="warehouses_exported_csv",
