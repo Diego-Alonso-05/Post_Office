@@ -14,10 +14,13 @@
 3. Run the DDL.sql in pgadmin QueryTool:
     * to create all the data structure (expect USER)
 
-4. Populate BD with data:
+4. Add the CRUD logical objects
+    * pgsql Query tool run: final_logic_db_objects.sql
+
+5. Populate BD with data:
     - Inside PgAdmin query tool run: populate_data.sql to load test data into the DB
 
-5. Run
+6. Run
     py manage.py runserver
 
 # Users to test from populate_data.sql:

@@ -3,14 +3,13 @@
     /*    Password for all: testpass123                             */
     /*==============================================================*/
     INSERT INTO "USER" (id, password, username, first_name, last_name, email, is_superuser, is_staff, is_active, last_login, created_at, contact, address, role, updated_at) VALUES
-    (1, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'ana.silva',      'Ana',    'Silva',    'ana.silva@email.com',    false, false, true, NULL, NOW(), '912000001', 'Rua das Flores 10, Lisboa',     'client',   NOW()),
-    (2, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'bruno.santos',   'Bruno',  'Santos',   'bruno.santos@email.com', false, false, true, NULL, NOW(), '912000002', 'Av. da Liberdade 55, Porto',    'client',   NOW()),
-    (3, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'carlos.ferreira','Carlos', 'Ferreira', 'carlos.f@email.com',     false, false, true, NULL, NOW(), '913000001', 'Rua do Carmo 22, Coimbra',      'driver',   NOW()),
-    (4, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'diana.costa',    'Diana',  'Costa',    'diana.costa@email.com',  false, false, true, NULL, NOW(), '913000002', 'Rua Augusta 100, Lisboa',       'driver',   NOW()),
-    (5, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'eduardo.lopes',  'Eduardo','Lopes',    'eduardo.l@email.com',    false, true,  true, NULL, NOW(), '914000001', 'Praça do Comércio 5, Lisboa',   'staff',    NOW()),
-    (6, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'filipa.mendes',  'Filipa', 'Mendes',   'filipa.m@email.com',     false, true,  true, NULL, NOW(), '914000002', 'Rua de Santa Catarina 8, Porto','staff',    NOW()),
-    (7, 'pbkdf2_sha256$870000$testsalt$dGVzdGhhc2gxMjM0NTY3ODkwYWJjZGVmZ2hpams=', 'gabriel.rodrigues','Gabriel','Rodrigues','gabriel.r@email.com',   true,  true,  true, NULL, NOW(), '915000001', 'Rua do Ouro 30, Lisboa',        'admin',    NOW());
-
+    (1, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'ana.silva',      'Ana',    'Silva',    'ana.silva@email.com',    false, false, true, NULL, NOW(), '912000001', 'Rua das Flores 10, Lisboa',     'client',   NOW()),
+    (2, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'bruno.santos',   'Bruno',  'Santos',   'bruno.santos@email.com', false, false, true, NULL, NOW(), '912000002', 'Av. da Liberdade 55, Porto',    'client',   NOW()),
+    (3, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'carlos.ferreira','Carlos', 'Ferreira', 'carlos.f@email.com',     false, false, true, NULL, NOW(), '913000001', 'Rua do Carmo 22, Coimbra',      'driver',   NOW()),
+    (4, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'diana.costa',    'Diana',  'Costa',    'diana.costa@email.com',  false, false, true, NULL, NOW(), '913000002', 'Rua Augusta 100, Lisboa',       'driver',   NOW()),
+    (5, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'eduardo.lopes',  'Eduardo','Lopes',    'eduardo.l@email.com',    false, true,  true, NULL, NOW(), '914000001', 'Praça do Comércio 5, Lisboa',   'staff',    NOW()),
+    (6, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'filipa.mendes',  'Filipa', 'Mendes',   'filipa.m@email.com',     false, true,  true, NULL, NOW(), '914000002', 'Rua de Santa Catarina 8, Porto','staff',    NOW()),
+    (7, 'pbkdf2_sha256$870000$testsalt$iuLMvk0m+LCvsMqxwMLDrAkIbHGc0fUmqN96uHS4uPo=', 'gabriel.rodrigues','Gabriel','Rodrigues','gabriel.r@email.com',   true,  true,  true, NULL, NOW(), '915000001', 'Rua do Ouro 30, Lisboa',        'admin',    NOW());
     -- Reset the serial sequence after raw SQL inserts
     SELECT setval(pg_get_serial_sequence('"USER"', 'id'), (SELECT MAX(id) FROM "USER"));
 
@@ -21,7 +20,6 @@
     INSERT INTO CLIENT (ID, TAX_ID) VALUES
     (1, 'PT123456789'),
     (2, 'PT987654321');
-
 
     /*==============================================================*/
     /* 3. WAREHOUSE — 2 rows                                        */
