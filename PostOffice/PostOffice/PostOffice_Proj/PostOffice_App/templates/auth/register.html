@@ -42,17 +42,25 @@ select option:checked {
 
       <div class="row" style="margin-top:12px">
         <div style="flex:1">
-          <label for="{{ form.full_name.id_for_label }}">Full name</label>
-          {{ form.full_name }}
+          <label for="{{ form.first_name.id_for_label }}">First name</label>
+          {{ form.first_name }}
+        </div>
+        <div style="flex:1">
+          <label for="{{ form.last_name.id_for_label }}">Last name</label>
+          {{ form.last_name }}
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1">
+          <label for="{{ form.username.id_for_label }}">Username</label>
+          {{ form.username }}
         </div>
         <div style="flex:1">
           <label for="{{ form.role.id_for_label }}">Role</label>
           {{ form.role }}
         </div>
       </div>
-
-      <label style="margin-top:12px" for="{{ form.username.id_for_label }}">Username</label>
-      {{ form.username }}
 
       <label style="margin-top:12px" for="{{ form.email.id_for_label }}">Email</label>
       {{ form.email }}
@@ -62,9 +70,6 @@ select option:checked {
 
       <label style="margin-top:12px" for="{{ form.address.id_for_label }}">Address</label>
       {{ form.address }}
-
-      <label style="margin-top:12px" for="{{ form.tax_id.id_for_label }}">Tax ID</label>
-      {{ form.tax_id }}
 
       <label style="margin-top:12px" for="{{ form.password1.id_for_label }}">Password</label>
       {{ form.password1 }}

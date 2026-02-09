@@ -12,22 +12,22 @@ from .models import User
 # ==========================================================
 
 # LEAVE THIS COMMENTED ???
-# class CustomUserCreationForm(UserCreationForm):
-#     class Meta:
-#         model = User
-#         fields = [
-#             "username", "first_name", "last_name", "email",
-#             "contact", "address", "role", "password1", "password2"
-#         ]
+class CustomUserCreationForm(UserCreationForm):
+    class Meta:
+        model = User
+        fields = [
+            "username", "first_name", "last_name", "email",
+            "contact", "address", "role", "password1", "password2"
+        ]
 
 
-# class CustomUserChangeForm(UserChangeForm):
-#     class Meta:
-#         model = User
-#         fields = [
-#             "username", "first_name", "last_name", "email",
-#             "contact", "address", "role"
-#         ]
+class CustomUserChangeForm(UserChangeForm):
+    class Meta:
+        model = User
+        fields = [
+            "username", "first_name", "last_name", "email",
+            "contact", "address", "role"
+        ]
 
 
 USER_ROLE_CHOICES = [

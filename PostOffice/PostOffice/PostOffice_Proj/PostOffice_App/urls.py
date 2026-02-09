@@ -16,7 +16,25 @@ from .views import (
     notifications,
 )
 
+
 urlpatterns = [
+    # ======================================================
+    # CLIENTS (DB objects via cursor)
+    # ======================================================
+    path("clients/", dashboard.clients_list, name="clients_list"),
+    path("clients/create/", dashboard.clients_create, name="clients_create"),
+    path("clients/<int:client_id>/edit/", dashboard.clients_update, name="clients_update"),
+    path("clients/<int:client_id>/delete/", dashboard.clients_delete, name="clients_delete"),
+
+    # ======================================================
+    # EMPLOYEES (DB objects via cursor)
+    # ======================================================
+    path("employees/", dashboard.employees_list, name="employees_list"),
+    path("employees/create/", dashboard.employees_create, name="employees_create"),
+    path("employees/<int:employee_id>/edit/", dashboard.employees_update, name="employees_update"),
+    path("employees/<int:employee_id>/delete/", dashboard.employees_delete, name="employees_delete"),
+
+
     # ======================================================
     # INVOICES (full CRUD + import/export using DB objects only)
     # ======================================================

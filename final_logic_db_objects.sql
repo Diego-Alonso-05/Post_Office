@@ -285,7 +285,7 @@ SELECT
     (SELECT COUNT(*) FROM "USER" WHERE role = 'client')                                     AS total_clients,
     (SELECT COUNT(*) FROM employee WHERE is_active = true)                                  AS total_employees,
     (SELECT COUNT(*) FROM route WHERE delivery_status NOT IN ('finished', 'cancelled'))     AS active_routes,
-    (SELECT COUNT(*) FROM delivery WHERE status = 'pending')                                AS pending_deliveries,
+    (SELECT COUNT(*) FROM delivery WHERE status IN ('registered', 'ready', 'pending', 'in_transit'))    AS pending_deliveries,
     (SELECT COUNT(*) FROM invoice)                                                          AS total_invoices;
 
 -- 14. fn_get_dashboard_stats
@@ -974,6 +974,38 @@ $$;
 /* ============================================================ */
 /*                       F U N C T I O N S                      */
 /* ============================================================ */
+
+CREATE OR REPLACE FUNCTION export_warehouses_csv()
+RETURNS TABLE (
+    id INT,
+    name TEXT,
+    contact TEXT,
+    address TEXT,
+    schedule_open TIME,
+    schedule_close TIME,
+    schedule TEXT,
+    maximum_storage_capacity INT,
+    is_active BOOLEAN,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT
+        id,
+        name,
+        contact,
+        address,
+        schedule_open,
+        schedule_close,
+        schedule,
+        maximum_storage_capacity,
+        is_active,
+        created_at,
+        updated_at
+    FROM v_warehouses_export
+    ORDER BY id;
+$$;
 
 -- 1. fn_is_license_valid  [EmployeeDriver]
 -- Check if a driver license has not expired.
